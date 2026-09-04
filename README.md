@@ -72,15 +72,15 @@ Unlike traditional radar demonstrations that capture raw ADC data and process it
 
 ## 4. Hardware Setup
 
-### 4.1 Jumper Configuration (SOP2 Debug Mode)
-| Jumper | State | Function |
-| :---: | :---: | :--- |
-| **SOP 2** | **ON (Closed)** | Enables JTAG / CCS Debugging |
-| **SOP 1** | OFF (Open) | Standard operational mode |
-| **SOP 0** | **ON (Closed)** | Development boot |
+### 4.1 Jumper Configuration (Boot Modes)
+| Mode | SOP 2 | SOP 1 | SOP 0 | State | Description |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **SOP 2 (Development)** | **ON** | OFF | **ON** | `1 0 1` | **CCS JTAG Debug Mode** (Loads `.xer4f` & `.xe674` directly into RAM) |
+| **SOP 5 (Flashing)** | OFF | OFF | **ON** | `0 0 1` | **TI UniFlash Mode** (Flashes `.bin` into QSPI flash memory) |
+| **SOP 4 (Functional)** | OFF | OFF | OFF | `0 0 0` | **Standalone Boot** (Autonomously runs flashed firmware on power-up) |
 
 ### 4.2 Power & Connections
-- **Power**: Connect a **5V / 2.5A** DC barrel power adapter (center-positive, 2.1mm).
+- **Power**: Connect a **5V / 2.5A** DC barrel power adapter (center-positive, 2.1mm). Do NOT power solely via USB!
 - **USB**: Connect the micro-USB cable to your PC (onboard TI XDS110 debug probe).
 - **Placement**: Position the radar broadside to the fan face at a distance of **0.3 m to 2.0 m**.
 
@@ -145,6 +145,16 @@ make clean && make all
 cd out_of_box_1843_mss/isk
 make clean && make all
 ```
+
+### Flashing with TI UniFlash (Permanent / Standalone Mode)
+To run the radar without Code Composer Studio or a JTAG debugger:
+1. **Set Jumpers to SOP5 (Flashing Mode)**: Set jumpers to `[0 0 1]` (SOP2: OFF, SOP1: OFF, SOP0: ON).
+2. **Power Cycle**: Power with 5V DC and press the **NRST** button once.
+3. **Open TI UniFlash**: Select device **AWR1843BOOST** $\rightarrow$ Click **Start**.
+4. **Set COM Port**: Under **Settings & Utilities**, enter the Application UART port (e.g. `/dev/ttyACM0` on Linux, `COMx` on Windows).
+5. **Flash Image**: Under **Program** $\rightarrow$ **Meta Image 1**, browse to your multicore `.bin` image $\rightarrow$ Click **Load Image**.
+6. **Switch to SOP4 (Functional Mode)**: Disconnect power, remove all jumpers (`[0 0 0]`), reconnect power, and press **NRST**.
+7. **Run**: Run `./send_cfg_and_stream.sh /dev/ttyACM0` to stream live RPM autonomously!
 
 ---
 

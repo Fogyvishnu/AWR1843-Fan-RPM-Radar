@@ -266,13 +266,102 @@ Output binary artifacts:
 
 ---
 
-## 7. Arch Linux Console & CLI Guide: Sending `.cfg` & Reading Live RPM
+## 7. Flashing Firmware to QSPI Flash Memory via TI UniFlash
+
+While JTAG debugging (Section 6) loads the binaries temporarily into internal RAM for development and code iteration, **TI UniFlash allows you to permanently flash the firmware onto the onboard QSPI serial flash memory**. Once flashed, the radar can operate autonomously in standalone mode on power-up without Code Composer Studio or a JTAG debugger!
+
+### 7.1 Understanding the Flashing Process vs. JTAG
+| Feature | JTAG Debug Mode (SOP2: `1 0 1`) | UniFlash Flashing Mode (SOP5: `0 0 1`) | Functional Mode (SOP4: `0 0 0`) |
+| :--- | :--- | :--- | :--- |
+| **Target Storage** | Internal RAM (Volatile) | Onboard QSPI Flash (Non-Volatile) | Boots from QSPI Flash |
+| **Files Used** | `.xer4f` (MSS) + `.xe674` (DSS) | Combined multicore image (`.bin`) | Runs flashed `.bin` |
+| **Tool Required** | Code Composer Studio (CCS) | TI UniFlash (Desktop or Cloud) | Standalone (No tool needed) |
+| **Best For** | Active code development & debugging | Flashing firmware to permanent memory | Autonomous deployment in the field |
+
+---
+
+### 7.2 Step-by-Step Flashing Procedure
+
+#### Step 1: Set Jumpers to SOP5 (Flashing Mode)
+1. Disconnect the power supply.
+2. Set the three SOP jumpers on the AWR1843BOOST:
+   - **SOP 2**: **OFF (Open / Removed)**
+   - **SOP 1**: **OFF (Open / Removed)**
+   - **SOP 0**: **ON (Closed / Jumper Installed)**
+   - Binary setting: `[0 0 1]`
+3. Connect the dedicated **5V / 2.5A** DC power supply to the barrel jack.
+4. Connect the micro-USB cable to your PC.
+5. Press the **NRST** (Reset) tactile button once to latch the bootloader into flashing mode.
+
+#### Step 2: Open TI UniFlash & Select Device
+1. Open the **TI UniFlash** tool (either the offline desktop application or [UniFlash Cloud](https://dev.ti.com/uniflash)).
+2. In the **New Configuration** search bar, type:
+   `AWR1843` or `AWR1843BOOST`
+3. Click on the detected device and click **Start**.
+
+#### Step 3: Set the Communication Port
+1. Click on the **Settings & Utilities** tab on the left sidebar.
+2. Under the **Setup** section, locate the **COM Port** field.
+3. Enter your **Application / User UART Port** (Enhanced COM Port):
+   - On **Linux**: `/dev/ttyACM0`
+   - On **Windows**: Enter the lower COM port number (e.g., `COM3` or `COM19` from Device Manager).
+   > [!CAUTION]
+   > Do **NOT** select the Auxiliary Data Port (`/dev/ttyACM1` or higher COM number). The bootloader exclusively communicates on the Application/User UART port!
+   > Ensure no other program (terminal, Python monitor, CCS console) is holding this port open.
+
+#### Step 4: Select the Binary & Flash
+1. Click on the **Program** tab on the left sidebar.
+2. In the **Meta Image 1** row:
+   - Click **Browse** and select your multicore binary file (`.bin`).
+   - *(Leave Meta Image 2, 3, and 4 completely blank).*
+3. Press the **NRST** button on the radar EVM once.
+4. Click the blue **Load Image** button.
+5. The progress bar will advance through erasing, programming, and verifying flash sectors.
+6. When complete, the console at the bottom will display:
+   ```text
+   [SUCCESS] Program Load completed successfully
+   ```
+
+---
+
+### 7.3 Booting & Running After Flashing (Functional Mode)
+
+To run the flashed firmware autonomously:
+1. Disconnect the 5V power supply.
+2. Remove the jumper from **SOP0** so that **all three jumpers are OFF**:
+   - **SOP 2**: **OFF (Open)**
+   - **SOP 1**: **OFF (Open)**
+   - **SOP 0**: **OFF (Open)**
+   - Binary setting: `[0 0 0]` (SOP4 Functional Mode)
+3. Reconnect the 5V / 2.5A power supply.
+4. Press the **NRST** button once.
+5. The radar now automatically boots from QSPI flash into your fan RPM firmware!
+6. Open your terminal and run the configuration script:
+   ```bash
+   ./send_cfg_and_stream.sh /dev/ttyACM0
+   ```
+   The radar starts transmitting chirps and outputs the live RPM directly.
+
+---
+
+### 7.4 UniFlash Troubleshooting FAQ
+
+| Error Message | Probable Root Cause | Exact Solution |
+| :--- | :--- | :--- |
+| **`[ERROR] Cortex_R4_0: Initial response from the device was not received`** | 1. Incorrect SOP jumper position.<br>2. Forgot to press NRST.<br>3. Selected the Auxiliary Data Port instead of Application Port. | 1. Verify SOP jumpers are `[0 0 1]` (SOP2 OFF, SOP1 OFF, SOP0 ON).<br>2. Press NRST button.<br>3. Ensure COM port is `/dev/ttyACM0` or the User UART port. |
+| **`Permission denied: '/dev/ttyACM0'`** | User does not have serial port access rights on Linux. | Run `sudo usermod -a -G uucp $USER` on Arch Linux (or `dialout` on Ubuntu) and then run `newgrp uucp`. |
+| **`[ERROR] Failed to open COM port`** | Port is currently held open by another application. | Close any running serial terminals (Minicom, screen, PuTTY, `send_cfg_and_stream.sh`, Python scripts). |
+| **Radar does not boot after flashing** | Board left in SOP5 Flashing mode. | Remove all SOP jumpers (`0 0 0` Functional mode) and press NRST. |
+
+---
+
+## 8. Arch Linux Console & CLI Guide: Sending `.cfg` & Reading Live RPM
 
 > [!TIP]
 > **No web browsers or GUI tools (such as TI mmWave Demo Visualizer) are required!**  
 > All configuration and live telemetry can be performed natively inside your standard Arch Linux terminal / console.
 
-### 7.1 Arch Linux Device Node & User Permissions
+### 8.1 Arch Linux Device Node & User Permissions
 
 When the AWR1843BOOST is plugged into USB, the Linux kernel assigns two ACM nodes:
 - `/dev/ttyACM0`: **Application / User UART Port** (Enhanced port @ 115200 baud). **Use this!**
