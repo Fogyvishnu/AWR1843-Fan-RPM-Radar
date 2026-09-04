@@ -92,8 +92,8 @@ Unlike traditional radar demonstrations that capture raw ADC data and process it
 
 ### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/<YOUR_USERNAME>/<YOUR_REPO_NAME>.git
-cd <YOUR_REPO_NAME>/out_of_box_1843_mss
+git clone https://github.com/Fogyvishnu/AWR1843-Fan-RPM-Radar.git
+cd AWR1843-Fan-RPM-Radar/out_of_box_1843_mss
 ```
 
 ### Step 2: Ensure User Permissions
