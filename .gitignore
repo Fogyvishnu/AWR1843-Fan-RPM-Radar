@@ -1,0 +1,51 @@
+# ==============================================================================
+# Git Ignore for TI mmWave AWR1843BOOST Project
+# ==============================================================================
+
+# CCS Theia Workspace internal metadata & unrelated experiments
+exp*
+my_mmw_mss
+.theia/
+.codex/
+.metadata/
+
+# Build intermediate objects and dependencies
+*.obj
+*.o
+*.d
+*.opt
+*.pbi
+*.pbd
+*.ilk
+*.map
+*__gen.c
+*__gen.h
+.config/
+.xdchelp
+
+# Generated RTOS sysbios objects
+src/sysbios/
+
+# Temporary / OS artifacts
+.DS_Store
+*~
+*.swp
+*.tmp
+__pycache__/
+*.pyc
+*.pyo
+
+# Keep compiled targets in isk if desired, or ignore intermediate make outputs
+# isk/*.obj
+
+# XDCtools & TI RTOS build artifacts
+configPkg/
+package/
+*.oe674
+*.oer4f
+*.asm
+*.pp
+
+# Compilation database
+compile_commands.json
+.clangd/
