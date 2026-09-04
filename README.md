@@ -44,11 +44,9 @@ Unlike traditional radar demonstrations that capture raw ADC data and process it
 ## 3. Repository Directory Structure
 
 ```text
-├── docs/                                      # Complete documentation & publications
+├── docs/                                      # Educational guides & theory
 │   ├── Beginners_Guide_mmWave_Radar_Fan_RPM.docx # Student learning guide (from physics to code)
-│   ├── Beginners_Guide_mmWave_Radar_Fan_RPM.doc
-│   ├── Research_Paper_Proposal_mmWave_Fan_RPM.docx # IEEE paper proposal & research blueprint
-│   └── Research_Paper_Proposal_mmWave_Fan_RPM.doc
+│   └── Beginners_Guide_mmWave_Radar_Fan_RPM.doc
 │
 ├── out_of_box_1843_mss/                       # Master Subsystem (ARM Cortex-R4F) Project
 │   ├── rpm_measurement.h                     # Physics constants, blade radius & data structures
@@ -150,10 +148,9 @@ make clean && make all
 
 ---
 
-## 7. Learning Resources & Research Proposals
+## 7. Educational Resources & Learning Guide
 
 - **Beginner's Educational Guide**: See [`docs/Beginners_Guide_mmWave_Radar_Fan_RPM.docx`](docs/Beginners_Guide_mmWave_Radar_Fan_RPM.docx) for a first-year engineering textbook explaining FMCW radar physics, Doppler shifts, parabolic vertex derivations, and step-by-step C code.
-- **Academic Research Proposal**: See [`docs/Research_Paper_Proposal_mmWave_Fan_RPM.docx`](docs/Research_Paper_Proposal_mmWave_Fan_RPM.docx) for four novel IEEE publication tracks (Dual-Domain Physics Fusion, Edge Efficiency, Fault Diagnosis, and Harsh Environment Sensing).
 
 ---
 
