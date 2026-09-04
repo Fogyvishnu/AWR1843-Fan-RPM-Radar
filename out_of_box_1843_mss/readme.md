@@ -244,13 +244,13 @@ Output binary artifacts:
 ### Step 4: Load Programs
 1. Select **C674X_0** in the Debug window:
    - Click `Run` -> `Load` -> `Load Program...`
-   - Click `Browse project...` and select:
-     `out_of_box_1843_dss/isk/out_of_box_1843_dss_isk.xe674`
+   - Browse to select:
+     `prebuilt_binaries/out_of_box_1843_dss_isk.xe674` (or `out_of_box_1843_dss/isk/out_of_box_1843_dss_isk.xe674`)
    - Click `OK` to load.
 2. Select **Cortex_R4_0** in the Debug window:
    - Click `Run` -> `Load` -> `Load Program...`
-   - Click `Browse project...` and select:
-     `out_of_box_1843_mss/isk/out_of_box_1843_mss_isk.xer4f`
+   - Browse to select:
+     `prebuilt_binaries/out_of_box_1843_mss_isk.xer4f` (or `out_of_box_1843_mss/isk/out_of_box_1843_mss_isk.xer4f`)
    - Click `OK` to load.
 
 ### Step 5: Run the Cores
@@ -312,7 +312,8 @@ While JTAG debugging (Section 6) loads the binaries temporarily into internal RA
 #### Step 4: Select the Binary & Flash
 1. Click on the **Program** tab on the left sidebar.
 2. In the **Meta Image 1** row:
-   - Click **Browse** and select your multicore binary file (`.bin`).
+   - Click **Browse** and select the prebuilt unified multicore binary file:
+     `prebuilt_binaries/awr1843_fan_rpm.bin`
    - *(Leave Meta Image 2, 3, and 4 completely blank).*
 3. Press the **NRST** button on the radar EVM once.
 4. Click the blue **Load Image** button.
