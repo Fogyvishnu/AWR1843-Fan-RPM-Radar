@@ -104,7 +104,13 @@ $$v_{\text{tip}} = d_{\text{continuous}} \times \Delta v_{\text{resolution}}$$
 
 #### D. Temporal Exponential Moving Average (EMA)
 To eliminate visual flicker and turbulence fluctuations while maintaining fast response:
-$$\text{RPM}_{\text{filtered}}[k] = \alpha \cdot \text{RPM}_{\text{raw}}[k] + (1 - \alpha) \cdot \text{RPM}_{\text{filtered}}[k-1]$$
+$$
+RPM_{\text{filtered}}[k]
+=
+\alpha \cdot RPM_{\text{raw}}[k]
++
+(1-\alpha)\cdot RPM_{\text{filtered}}[k-1]
+$$
 where $\alpha = 0.20$ provides smooth, responsive readings.
 
 ---
