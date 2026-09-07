@@ -13,7 +13,7 @@
  *        Users can adjust these to match their specific fan setup.
  */
 #define RPM_DEFAULT_NUM_BLADES          3U      /* Number of fan blades */
-#define RPM_DEFAULT_BLADE_RADIUS_M      0.10f   /* Fan blade radius in meters (e.g. 0.10 m = 10 cm) */
+#define RPM_DEFAULT_BLADE_RADIUS_M      0.60f   /* Fan blade radius in meters (e.g. 0.10 m = 10 cm) */
 #define RPM_DEFAULT_ASPECT_ANGLE_DEG    0.0f    /* Angle between radar line-of-sight & fan rotation plane (deg) */
 
 /**************************************************************************

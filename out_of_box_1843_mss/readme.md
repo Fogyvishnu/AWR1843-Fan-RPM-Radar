@@ -561,7 +561,7 @@ This yields:
 Open [`rpm_measurement.h`](file:///home/vish/workspace_ccstheia/out_of_box_1843_mss/rpm_measurement.h) and edit:
 ```c
 /* 1. Measure the physical radius from hub center to blade tip in meters: */
-#define RPM_DEFAULT_BLADE_RADIUS_M      0.10f   /* 0.10 m = 10 cm */
+#define RPM_DEFAULT_BLADE_RADIUS_M      0.60f   /* 0.60 m = 60 cm */
 
 /* 2. Angle between radar line-of-sight and the plane of rotation: */
 #define RPM_DEFAULT_ASPECT_ANGLE_DEG    0.0f    /* 0 deg for straight on */
