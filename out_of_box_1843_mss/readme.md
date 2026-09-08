@@ -561,13 +561,13 @@ This yields:
 Open [`rpm_measurement.h`](file:///home/vish/workspace_ccstheia/out_of_box_1843_mss/rpm_measurement.h) and edit:
 ```c
 /* 1. Measure the physical radius from hub center to blade tip in meters: */
-#define RPM_DEFAULT_BLADE_RADIUS_M      0.60f   /* 0.60 m = 60 cm */
+#define RPM_DEFAULT_BLADE_RADIUS_M      0.60f   /* 0.60 m = 60 cm (ceiling fan) */
 
 /* 2. Angle between radar line-of-sight and the plane of rotation: */
-#define RPM_DEFAULT_ASPECT_ANGLE_DEG    0.0f    /* 0 deg for straight on */
+#define RPM_DEFAULT_ASPECT_ANGLE_DEG    30.0f   /* 30.0 deg for tilted radar setup */
 
 /* 3. Output formatting mode: */
-#define RPM_UART_NUMERIC_ONLY           0       /* 0: "RPM: 1250.4\r\n", 1: "1250.4\r\n" */
+#define RPM_UART_NUMERIC_ONLY           0       /* 0: Rich diagnostic string, 1: Raw numeric */
 ```
 
 ---
@@ -576,9 +576,11 @@ Open [`rpm_measurement.h`](file:///home/vish/workspace_ccstheia/out_of_box_1843_
 
 | Issue / Symptom | Root Cause | Solution |
 | :--- | :--- | :--- |
-| **Output shows `RPM: 0.0` consistently** | 1. Fan is stopped or blade reflection is too weak.<br>2. Fan is closer than $8\text{ cm}$ (near-field leakage filter).<br>3. `guiMonitor` bit 5 is disabled. | 1. Ensure fan is rotating.<br>2. Place fan between $0.3\text{ m}$ and $1.5\text{ m}$ away.<br>3. Verify `profile_fan_rpm.cfg` has `guiMonitor -1 1 0 0 0 1 0`. |
+| **Output shows `10-15 RPM` or `STOPPED` when fan is on** | 1. Radar is placed directly underneath at 90° (zero line-of-sight velocity).<br>2. DC clutter / human motion leakage into bin 1. | 1. Move the radar **1.5 m to 2.5 m away**, tilted up at **30° to 45°** toward the blades.<br>2. Use the updated firmware with additive log-domain CFAR and bin-1 clutter rejection. |
+| **Live stream shows `Dist: 0.00m` or wrong distance** | Radar beam is pointed into empty space or a distant wall instead of the fan blades. | Aim the antenna patch directly at the fan blade sweep. Verify `Dist` matches the physical distance to the fan ($1.5 - 2.5\text{ m}$). |
 | **Live RPM is off by a constant factor ($\approx 1.5\times$ or $0.5\times$)** | `RPM_DEFAULT_BLADE_RADIUS_M` does not match the actual fan radius. | Measure the physical radius from center spindle to blade tip with a ruler and update the macro in `rpm_measurement.h`. |
 | **CLI fails to start / No output on UART** | Wrong COM port connected or baud rate mismatch. | Connect to the **Application/User UART Port** at **115200 baud**. Do not connect to the Auxiliary Data Port. |
 | **CCS JTAG reports "Target failed to connect"** | Jumper setting incorrect or board brownout. | 1. Check jumpers: **SOP2 and SOP0 must be closed**, SOP1 open (`1 0 1`).<br>2. Ensure 5V / 2.5A barrel power supply is plugged in and press the NRST button. |
-| **Readings saturate or alias at top speed** | Blade tip linear speed exceeds radar $V_{\max}$ ($10.59\text{ m/s}$). | Increase $V_{\max}$ by decreasing chirp ramp time in `profileCfg` or switching to single-TX mode. |
+| **Readings saturate or alias at top speed (> 200 RPM)** | Blade tip linear speed exceeds 2-TX radar $V_{\max}$ ($10.59\text{ m/s}$). | Switch to the high-speed single-TX profile: `profile_fan_rpm_highspeed.cfg` ($V_{\max} = 21.18\text{ m/s}$, up to 400+ RPM). |
 | **Unexpected binary characters on UART** | Listening to the Auxiliary Data Port instead of the Application Port. | Close the Auxiliary port (921600) and open the Application Port (115200). Live RPM is pure ASCII on the Application Port. |
+

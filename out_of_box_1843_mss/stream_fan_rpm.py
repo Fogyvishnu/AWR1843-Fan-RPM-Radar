@@ -137,9 +137,9 @@ def main():
         print("\n[INFO] Skipping config upload (--skip-cfg active). Listening directly...")
 
     print("[2/2] Streaming Live RPM from Application UART...")
-    print("-" * 65)
-    print(f" {'TIMESTAMP':<12} | {'LIVE RPM':<14} | {'STATUS':<15} | {'VISUAL BAR'}")
-    print("-" * 65)
+    print("-" * 90)
+    print(f" {'TIMESTAMP':<10} | {'LIVE RPM':<13} | {'STATUS':<14} | {'DISTANCE':<10} | {'SNR':<9} | {'TIP VELOCITY':<13} | {'VISUAL'}")
+    print("-" * 90)
 
     try:
         while True:
@@ -149,23 +149,42 @@ def main():
 
             # Process live RPM string
             if raw_line.startswith("RPM:"):
-                rpm_str = raw_line.replace("RPM:", "").strip()
-                try:
-                    rpm_val = float(rpm_str)
-                    now_str = time.strftime("%H:%M:%S")
+                now_str = time.strftime("%H:%M:%S")
+                if "|" in raw_line:
+                    tokens = [t.strip() for t in raw_line.split("|")]
+                    rpm_str = tokens[0].replace("RPM:", "").strip()
+                    status = tokens[1] if len(tokens) > 1 else "IDLE"
+                    dist = tokens[2] if len(tokens) > 2 else ""
+                    snr = tokens[3] if len(tokens) > 3 else ""
+                    tip_vel = tokens[4] if len(tokens) > 4 else ""
+                    try:
+                        rpm_val = float(rpm_str)
+                        if status == "RUNNING" and rpm_val > 10.0:
+                            bar_len = min(15, max(1, int(rpm_val / 30.0)))
+                            bar = "#" * bar_len
+                            status_str = "FAN RUNNING"
+                        else:
+                            status_str = "STOPPED / IDLE"
+                            bar = "-"
 
-                    if rpm_val > 10.0:
-                        status = "FAN RUNNING"
-                        # Generate simple visual bar up to 2500 RPM
-                        bar_len = min(25, int(rpm_val / 100.0))
-                        bar = "#" * bar_len
-                    else:
-                        status = "STOPPED / IDLE"
-                        bar = "-"
+                        print(f" {now_str:<10} | {rpm_val:7.1f} RPM   | {status_str:<14} | {dist:<10} | {snr:<9} | {tip_vel:<13} | [{bar:<15}]")
+                    except ValueError:
+                        pass
+                else:
+                    rpm_str = raw_line.replace("RPM:", "").strip()
+                    try:
+                        rpm_val = float(rpm_str)
+                        if rpm_val > 10.0:
+                            status_str = "FAN RUNNING"
+                            bar_len = min(15, max(1, int(rpm_val / 30.0)))
+                            bar = "#" * bar_len
+                        else:
+                            status_str = "STOPPED / IDLE"
+                            bar = "-"
+                        print(f" {now_str:<10} | {rpm_val:7.1f} RPM   | {status_str:<14} | {'-':<10} | {'-':<9} | {'-':<13} | [{bar:<15}]")
+                    except ValueError:
+                        pass
 
-                    print(f" {now_str:<12} | {rpm_val:8.1f} RPM   | {status:<15} | [{bar:<25}]")
-                except ValueError:
-                    pass
 
     except KeyboardInterrupt:
         print("\n\nUser interrupted (Ctrl+C). Stopping radar sensor...")

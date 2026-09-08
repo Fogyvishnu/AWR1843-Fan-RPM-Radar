@@ -8,12 +8,23 @@ This directory contains pre-compiled binaries and configuration files for the **
 
 | File | Subsystem / Format | Purpose | How to Use |
 | :--- | :--- | :--- | :--- |
-| **`awr1843_fan_rpm.bin`** (321 KB) | Unified Multicore MetaImage | **Direct QSPI Flash** | Burn with **TI UniFlash** for standalone operation without a debugger. |
+| **`awr1843_fan_rpm.bin`** (328 KB) | Unified Multicore MetaImage | **Direct QSPI Flash** | Burn with **TI UniFlash** for standalone operation without a debugger. |
 | **`out_of_box_1843_mss_isk.xer4f`** (3.4 MB) | ARM Cortex-R4F (ELF) | **Live JTAG Debug** | Load into Cortex-R4F via **Code Composer Studio (CCS)**. |
 | **`out_of_box_1843_dss_isk.xe674`** (2.8 MB) | TI C674x DSP (ELF) | **Live JTAG Debug** | Load into C674x DSP via **Code Composer Studio (CCS)**. |
-| **`profile_fan_rpm.cfg`** (3.0 KB) | Plaintext CLI Profile | **Radar Chirp Config** | Send over UART at 115200 baud to start FMCW chirping. |
+| **`profile_fan_rpm.cfg`** (3.0 KB) | Plaintext CLI Profile (2-TX) | **Standard Profile** | Up to ~195 RPM ($v_{\max} = 10.59$ m/s, 32 Doppler bins). |
+| **`profile_fan_rpm_highspeed.cfg`** (1.3 KB) | Plaintext CLI Profile (1-TX) | **High-Speed Profile** | Up to 389+ RPM ($v_{\max} = 21.18$ m/s, 64 Doppler bins, no aliasing). |
 
 ---
+
+## 📐 Radar Positioning & Angle Alignment Guide
+
+For accurate ceiling fan RPM measurement, sensor geometry is critical:
+
+1. **Avoid 90° orthogonal incidence**: Do **not** place the radar directly underneath pointing straight up into the fan motor hub. When the radar is perpendicular to the fan disc, the radial velocity along the radar beam is zero ($v_{\text{radial}} = v_{\text{tip}} \cdot \cos(90^\circ) = 0$).
+2. **Recommended Placement**: Place the radar on a table or tripod **1.5 m to 2.5 m away** from the fan center, tilted upwards at a **30° to 45° aspect angle** toward the rotating blade disc.
+3. **Approaching and Receding Signatures**: This tilted geometry maximizes the line-of-sight velocity components, producing strong approaching (+Doppler) and receding (-Doppler) blade tip signatures.
+4. **Live Diagnostics**: The live console stream displays real-time `Dist` (distance in meters) and `SNR` (blade return strength in dB above noise floor), confirming the radar has localized the fan.
+
 
 ## ⚡ Option A: Direct Flashing via TI UniFlash (Permanent / Standalone Mode)
 

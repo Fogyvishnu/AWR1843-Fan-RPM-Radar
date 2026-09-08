@@ -686,6 +686,7 @@ MmwDemo_MSS_MCB    gMmwMssMCB;
  *  Doppler step (m/s per Doppler bin) for each subframe, used for RPM calculation
  */
 static float gMmwMssDopplerStep[RL_MAX_SUBFRAMES];
+static float gMmwMssRangeStep[RL_MAX_SUBFRAMES];
 
 /**
  * @brief
@@ -1224,25 +1225,42 @@ static void MmwDemo_transmitProcessedOutput
             uint16_t numRangeBins = subFrameCfg->numRangeBins;
             uint16_t numDopplerBins = subFrameCfg->numDopplerBins;
             float dopplerResolution = gMmwMssDopplerStep[result->subFrameIdx];
+            float rangeResolution   = gMmwMssRangeStep[result->subFrameIdx];
             FanRpmResult_t rpmResult;
 
             RPM_calculateFromDetMatrix(detMatrix,
                                        numRangeBins,
                                        numDopplerBins,
                                        dopplerResolution,
+                                       rangeResolution,
                                        &rpmResult);
 
-            /* Send ONLY the live RPM over UART */
+            /* Send live RPM and diagnostics over UART */
 #if (RPM_UART_NUMERIC_ONLY == 1)
             CLI_write("%.1f\r\n", rpmResult.rpm);
 #else
-            CLI_write("RPM: %.1f\r\n", rpmResult.rpm);
+            if (rpmResult.isFanDetected)
+            {
+                CLI_write("RPM: %.1f | RUNNING | Dist: %.2fm | SNR: %.1fdB | TipVel: %.1fm/s\r\n",
+                          rpmResult.rpm,
+                          rpmResult.distanceM,
+                          rpmResult.snrDb,
+                          rpmResult.tipVelocity);
+            }
+            else
+            {
+                CLI_write("RPM: %.1f | STOPPED | Dist: %.2fm | SNR: %.1fdB | TipVel: 0.0m/s\r\n",
+                          rpmResult.rpm,
+                          rpmResult.distanceM,
+                          rpmResult.snrDb);
+            }
 #endif
-            System_printf("Live RPM: %.1f (Raw: %.1f, TipVel: %.2f m/s, RangeBin: %u, PeakBin: %d)\n",
+            System_printf("Live RPM: %.1f (Raw: %.1f, TipVel: %.2f m/s, Dist: %.2f m, SNR: %.1f dB, PeakBin: %d)\n",
                           rpmResult.rpm,
                           rpmResult.rpmRaw,
                           rpmResult.tipVelocity,
-                          rpmResult.rangeBin,
+                          rpmResult.distanceM,
+                          rpmResult.snrDb,
                           rpmResult.dopplerBin);
         }
 
@@ -1864,6 +1882,7 @@ static int32_t MmwDemo_dataPathConfig (void)
 
         subFrameCfg->numDopplerBins = RFparserOutParams.numDopplerBins;
         gMmwMssDopplerStep[subFrameIndx] = RFparserOutParams.dopplerStep;
+        gMmwMssRangeStep[subFrameIndx]   = RFparserOutParams.rangeStep;
         subFrameCfg->numChirpsPerChirpEvent = RFparserOutParams.numChirpsPerChirpEvent;
         subFrameCfg->adcBufChanDataSize = RFparserOutParams.adcBufChanDataSize;
         subFrameCfg->objDetDynCfg.dynCfg.prepareRangeAzimuthHeatMap = subFrameCfg->guiMonSel.rangeAzimuthHeatMap;

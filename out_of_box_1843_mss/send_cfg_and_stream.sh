@@ -73,9 +73,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 done < "$CFG"
 
 echo -e "\n[2/2] Configuration uploaded! Sensor is active."
-echo "---------------------------------------------------------"
-echo " TIMESTAMP   | LIVE FAN SPEED       | STATUS"
-echo "---------------------------------------------------------"
+echo "-------------------------------------------------------------------------------------------------"
+echo " TIMESTAMP   | LIVE FAN SPEED   | STATUS         | DISTANCE   | SNR        | TIP VELOCITY"
+echo "-------------------------------------------------------------------------------------------------"
 
 # Continuously read and format incoming stream
 while IFS= read -r line <&3; do
@@ -83,16 +83,33 @@ while IFS= read -r line <&3; do
     line=$(echo "$line" | tr -d '\r')
     
     if [[ "$line" =~ ^RPM: ]]; then
-        rpm_val=$(echo "$line" | sed 's/RPM:[[:space:]]*//')
         now_str=$(date +"%H:%M:%S")
         
-        # Color output: bright green for active fan, cyan for idle
-        if awk "BEGIN {exit !($rpm_val > 10.0)}"; then
-            printf " %-11s | \e[1;32m%-20s\e[0m | \e[32mFAN RUNNING\e[0m\n" "$now_str" "$line"
+        if [[ "$line" == *"|"* ]]; then
+            IFS='|' read -r r_token s_token d_token snr_token v_token <<< "$line"
+            rpm_num=$(echo "$r_token" | sed 's/RPM:[[:space:]]*//;s/[[:space:]]*$//')
+            status=$(echo "$s_token" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            dist=$(echo "$d_token" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            snr=$(echo "$snr_token" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            tipvel=$(echo "$v_token" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            
+            if [[ "$status" == "RUNNING" ]]; then
+                printf " %-11s | \e[1;32m%7s RPM\e[0m    | \e[1;32m%-14s\e[0m | %-10s | %-10s | %-12s\n" \
+                    "$now_str" "$rpm_num" "$status" "$dist" "$snr" "$tipvel"
+            else
+                printf " %-11s | \e[1;36m%7s RPM\e[0m    | \e[1;33m%-14s\e[0m | %-10s | %-10s | %-12s\n" \
+                    "$now_str" "$rpm_num" "$status" "$dist" "$snr" "$tipvel"
+            fi
         else
-            printf " %-11s | \e[1;36m%-20s\e[0m | \e[33mSTOPPED / IDLE\e[0m\n" "$now_str" "$line"
+            rpm_val=$(echo "$line" | sed 's/RPM:[[:space:]]*//')
+            if awk "BEGIN {exit !($rpm_val > 10.0)}"; then
+                printf " %-11s | \e[1;32m%7s RPM\e[0m    | \e[32mFAN RUNNING\e[0m\n" "$now_str" "$rpm_val"
+            else
+                printf " %-11s | \e[1;36m%7s RPM\e[0m    | \e[33mSTOPPED / IDLE\e[0m\n" "$now_str" "$rpm_val"
+            fi
         fi
     elif [[ "$line" =~ "Error" ]]; then
         echo -e " \e[1;31m[CLI ERROR]\e[0m $line"
     fi
 done
+

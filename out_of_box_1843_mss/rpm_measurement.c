@@ -8,6 +8,10 @@
 
 #define PI_FLOAT                3.141592653589793f
 #define DEG_TO_RAD              (PI_FLOAT / 180.0f)
+/* Conversion factor: Q8 log2 magnitude units to dB.
+ * 256 Q8 units = 1 bit of log2 = 6.0205999 dB.
+ * 1 Q8 unit = 6.0205999 / 256.0 = 0.02351796875 dB */
+#define Q8_TO_DB                0.02351796875f
 
 /**************************************************************************
  * Static State Variables (Temporal Smoothing Filter)
@@ -62,28 +66,28 @@ static float RPM_parabolicInterpolation(float ym1, float y0, float yp1)
  * @brief  Extracts high-accuracy fan RPM from the 2D Range-Doppler detection matrix.
  *
  * Algorithm Pipeline:
- *  1. Dynamic Range Bin Localization: Scans non-zero Doppler energy to find range bin with the fan.
- *  2. Noise Floor & CFAR Thresholding: Computes local range-slice noise floor and dynamic threshold.
+ *  1. Excess-Energy Range Localization: Finds range bin with excess moving Doppler energy above its noise floor.
+ *  2. Log-Domain SNR Thresholding: Additive delta in Q8 log2 scale (+160 units = +3.76 dB SNR).
  *  3. Symmetric Doppler Envelope Extraction: Detects positive and negative Doppler boundaries (blade tips).
- *  4. Sub-Bin Parabolic Interpolation: Achieves fractional Doppler bin resolution.
- *  5. Linear Tip Velocity to Rotational RPM conversion using blade radius and radar aspect angle.
- *  6. Temporal Exponential Moving Average (EMA) filter for stable live reading.
+ *  4. DC & Low-Speed Clutter Rejection: Skips Doppler bin 1 (< 0.66 m/s, human breathing / stationary clutter).
+ *  5. Sub-Bin Parabolic Interpolation: Achieves fractional Doppler bin resolution.
+ *  6. Linear Tip Velocity to Rotational RPM conversion using blade radius and radar aspect angle.
+ *  7. Temporal Exponential Moving Average (EMA) filter for stable live reading.
  */
 void RPM_calculateFromDetMatrix(
     uint16_t* detMatrix,
     uint16_t numRangeBins,
     uint16_t numDopplerBins,
     float dopplerResolution,
+    float rangeResolution,
     FanRpmResult_t *result)
 {
     uint16_t r;
     uint16_t d;
     int32_t  zeroDopplerBin;
     uint16_t bestRangeBin;
-    uint32_t maxMovingEnergy;
-    uint32_t noiseSum;
-    uint16_t noiseCount;
-    uint16_t avgNoiseFloor;
+    uint32_t maxExcessEnergy;
+    uint32_t bestSliceNoise;
     uint16_t detectionThreshold;
     uint16_t peakVal;
     int32_t  peakDopplerBin;
@@ -96,63 +100,97 @@ void RPM_calculateFromDetMatrix(
     float    cosAngle;
     float    effectiveRadius;
     float    rpmInstantaneous;
+    float    snrDb;
 
-    if ((detMatrix == NULL) || (result == NULL) || (numRangeBins <= RPM_MIN_RANGE_BIN) || (numDopplerBins < 4))
+    if ((detMatrix == NULL) || (result == NULL) || (numRangeBins <= RPM_MIN_RANGE_BIN) || (numDopplerBins < 8))
     {
         return;
     }
 
     zeroDopplerBin  = (int32_t)(numDopplerBins / 2);
-    bestRangeBin    = 0;
-    maxMovingEnergy = 0;
+    bestRangeBin    = RPM_MIN_RANGE_BIN;
+    maxExcessEnergy = 0;
+    bestSliceNoise  = 0;
 
     /*-------------------------------------------------------------------------
      * STEP 1: Automatic Fan Range Bin Localization
-     * Identify the range bin containing the fan by finding the maximum non-zero
-     * Doppler energy (ignores stationary clutter like walls and tables).
+     * For each range bin, estimate its local noise floor (excluding DC & edges).
+     * Then accumulate only the excess energy from moving Doppler bins that
+     * clearly rise above that local noise floor (> 1.5 dB / 64 Q8 units).
+     * This robustly pinpoints the spinning fan without being misled by
+     * range bins with high thermal noise.
      *------------------------------------------------------------------------*/
     for (r = RPM_MIN_RANGE_BIN; r < numRangeBins; r++)
     {
-        uint32_t rangeMovingEnergy = 0;
         uint32_t rOffset = (uint32_t)r * (uint32_t)numDopplerBins;
+        uint32_t noiseSum = 0;
+        uint16_t noiseCount = 0;
+        uint32_t sliceNoise;
+        uint32_t sliceExcessEnergy = 0;
 
-        for (d = 1; d < numDopplerBins; d++)
+        /* First pass: average noise across Doppler bins (skipping DC and DC-adjacent leakage) */
+        for (d = RPM_MIN_DOPPLER_BIN; d <= (uint16_t)(numDopplerBins - RPM_MIN_DOPPLER_BIN); d++)
         {
-            if (d == (uint16_t)zeroDopplerBin)
+            if ((d == (uint16_t)zeroDopplerBin) ||
+                (d == (uint16_t)(zeroDopplerBin - 1)) ||
+                (d == (uint16_t)(zeroDopplerBin + 1)))
             {
                 continue;
             }
-            rangeMovingEnergy += (uint32_t)detMatrix[rOffset + d];
+            noiseSum += (uint32_t)detMatrix[rOffset + d];
+            noiseCount++;
         }
 
-        if (rangeMovingEnergy > maxMovingEnergy)
+        if (noiseCount == 0)
         {
-            maxMovingEnergy = rangeMovingEnergy;
-            bestRangeBin = r;
+            continue;
+        }
+
+        sliceNoise = noiseSum / noiseCount;
+
+        /* Second pass: accumulate excess energy above (sliceNoise + 64) (~1.5 dB SNR) */
+        for (d = RPM_MIN_DOPPLER_BIN; d <= (uint16_t)(numDopplerBins - RPM_MIN_DOPPLER_BIN); d++)
+        {
+            if ((d == (uint16_t)zeroDopplerBin) ||
+                (d == (uint16_t)(zeroDopplerBin - 1)) ||
+                (d == (uint16_t)(zeroDopplerBin + 1)))
+            {
+                continue;
+            }
+            if ((uint32_t)detMatrix[rOffset + d] > (sliceNoise + 64U))
+            {
+                sliceExcessEnergy += ((uint32_t)detMatrix[rOffset + d] - sliceNoise);
+            }
+        }
+
+        if (sliceExcessEnergy > maxExcessEnergy)
+        {
+            maxExcessEnergy = sliceExcessEnergy;
+            bestRangeBin    = r;
+            bestSliceNoise  = sliceNoise;
         }
     }
 
-    /*-------------------------------------------------------------------------
-     * STEP 2: Noise Floor & Dynamic Threshold Estimation
-     * Compute average noise level across the fan's range slice.
-     *------------------------------------------------------------------------*/
-    noiseSum   = 0;
-    noiseCount = 0;
+    /* Fallback noise floor if no moving excess energy was found */
+    if (bestSliceNoise == 0)
     {
         uint32_t fanOffset = (uint32_t)bestRangeBin * (uint32_t)numDopplerBins;
-        for (d = 1; d < numDopplerBins; d++)
+        uint32_t noiseSum = 0;
+        uint16_t noiseCount = 0;
+        for (d = RPM_MIN_DOPPLER_BIN; d <= (uint16_t)(numDopplerBins - RPM_MIN_DOPPLER_BIN); d++)
         {
-            if (d == (uint16_t)zeroDopplerBin)
-            {
-                continue;
-            }
             noiseSum += (uint32_t)detMatrix[fanOffset + d];
             noiseCount++;
         }
+        bestSliceNoise = (noiseCount > 0) ? (noiseSum / noiseCount) : 1000U;
     }
 
-    avgNoiseFloor = (noiseCount > 0) ? (uint16_t)(noiseSum / noiseCount) : 0;
-    detectionThreshold = (uint16_t)((float)avgNoiseFloor * RPM_SNR_THRESHOLD_RATIO);
+    /*-------------------------------------------------------------------------
+     * STEP 2: Log-Domain Thresholding
+     * Detection matrix is in Q8 log2 scale: 256 units = 6.02 dB.
+     * Additive delta: detectionThreshold = bestSliceNoise + RPM_SNR_THRESHOLD_DELTA_Q8.
+     *------------------------------------------------------------------------*/
+    detectionThreshold = (uint16_t)(bestSliceNoise + RPM_SNR_THRESHOLD_DELTA_Q8);
     if (detectionThreshold < RPM_MIN_VALID_MAGNITUDE)
     {
         detectionThreshold = RPM_MIN_VALID_MAGNITUDE;
@@ -160,7 +198,8 @@ void RPM_calculateFromDetMatrix(
 
     /*-------------------------------------------------------------------------
      * STEP 3: Peak Magnitude and Doppler Envelope Detection
-     * Find strongest peak and outer spectral edges (positive and negative tips).
+     * Scan positive Doppler bins (d = RPM_MIN_DOPPLER_BIN to zeroDopplerBin - 1)
+     * and negative Doppler bins (d = zeroDopplerBin + 1 to numDopplerBins - RPM_MIN_DOPPLER_BIN).
      *------------------------------------------------------------------------*/
     peakVal        = 0;
     peakDopplerBin = 0;
@@ -170,8 +209,8 @@ void RPM_calculateFromDetMatrix(
     {
         uint32_t fanOffset = (uint32_t)bestRangeBin * (uint32_t)numDopplerBins;
 
-        /* Scan Positive Doppler bins: d = 1 to (N/2 - 1) */
-        for (d = 1; d < (uint16_t)zeroDopplerBin; d++)
+        /* Scan Positive Doppler bins (approaching blade tip) */
+        for (d = RPM_MIN_DOPPLER_BIN; d < (uint16_t)zeroDopplerBin; d++)
         {
             uint16_t val = detMatrix[fanOffset + d];
             if (val > peakVal)
@@ -185,8 +224,8 @@ void RPM_calculateFromDetMatrix(
             }
         }
 
-        /* Scan Negative Doppler bins: d = (N/2 + 1) to (N - 1) */
-        for (d = (uint16_t)zeroDopplerBin + 1; d < numDopplerBins; d++)
+        /* Scan Negative Doppler bins (receding blade tip) */
+        for (d = (uint16_t)zeroDopplerBin + 1; d <= (uint16_t)(numDopplerBins - RPM_MIN_DOPPLER_BIN); d++)
         {
             uint16_t val = detMatrix[fanOffset + d];
             int32_t signedD = (int32_t)d - (int32_t)numDopplerBins;
@@ -206,8 +245,25 @@ void RPM_calculateFromDetMatrix(
         }
     }
 
+    /* Calculate SNR in dB relative to localized slice noise floor */
+    if (peakVal > (uint16_t)bestSliceNoise)
+    {
+        snrDb = ((float)peakVal - (float)bestSliceNoise) * Q8_TO_DB;
+    }
+    else
+    {
+        snrDb = -1.0f * (((float)bestSliceNoise - (float)peakVal) * Q8_TO_DB);
+    }
+
+    /* Populate diagnostic range and SNR metrics */
+    result->rangeBin   = bestRangeBin;
+    result->distanceM  = (float)bestRangeBin * rangeResolution;
+    result->magnitude  = peakVal;
+    result->noiseFloor = (uint16_t)bestSliceNoise;
+    result->snrDb      = snrDb;
+
     /* Check if target signal is sufficiently above background noise */
-    if ((peakVal < detectionThreshold) || (maxMovingEnergy == 0))
+    if ((peakVal < detectionThreshold) || (maxExcessEnergy == 0))
     {
         /* Fan not detected or stopped: smooth decay to zero */
         gRpmSmoothed *= (1.0f - RPM_EMA_ALPHA);
@@ -221,8 +277,6 @@ void RPM_calculateFromDetMatrix(
         result->tipVelocity   = 0.0f;
         result->peakVelocity  = 0.0f;
         result->dopplerBin    = 0;
-        result->rangeBin      = bestRangeBin;
-        result->magnitude     = peakVal;
         result->isFanDetected = false;
         return;
     }
@@ -260,7 +314,8 @@ void RPM_calculateFromDetMatrix(
         int32_t rawPeakIdx = (peakDopplerBin >= 0) ? peakDopplerBin : (peakDopplerBin + (int32_t)numDopplerBins);
 
         if ((rawPeakIdx > 1) && (rawPeakIdx < ((int32_t)numDopplerBins - 1)) &&
-            (rawPeakIdx != (zeroDopplerBin - 1)) && (rawPeakIdx != zeroDopplerBin))
+            (rawPeakIdx != (zeroDopplerBin - 1)) && (rawPeakIdx != zeroDopplerBin) &&
+            (rawPeakIdx != (zeroDopplerBin + 1)))
         {
             float ym1 = (float)detMatrix[fanOffset + (rawPeakIdx - 1)];
             float y0  = (float)detMatrix[fanOffset + rawPeakIdx];
@@ -318,7 +373,6 @@ void RPM_calculateFromDetMatrix(
     result->tipVelocity   = tipVelocity;
     result->peakVelocity  = peakVelocity;
     result->dopplerBin    = peakDopplerBin;
-    result->rangeBin      = bestRangeBin;
-    result->magnitude     = peakVal;
     result->isFanDetected = true;
 }
+
