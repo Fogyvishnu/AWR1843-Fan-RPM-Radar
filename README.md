@@ -8,6 +8,10 @@
 [![Prebuilt: Ready to Flash](https://img.shields.io/badge/Prebuilt_Binaries-Ready_to_Flash-success.svg)](#5-deployment-guides-debug-vs-flash-mode)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-lightgrey.svg)]()
 
+<p align="center">
+  <img src="docs/images/fan_rpm_radar_overview.png" alt="Real-Time Edge mmWave Radar Fan Tachometer" width="850">
+</p>
+
 ---
 
 ## 1. Overview
@@ -53,6 +57,9 @@ Unlike typical radar demonstrations that capture raw ADC data and process it off
 │   └── README.md                             # Quick-flashing cheat sheet
 │
 ├── docs/                                      # Educational guides & theory
+│   ├── images/                                # Project diagrams and hardware setup photos
+│   │   ├── fan_rpm_radar_overview.png         # Setup & micro-Doppler overview banner
+│   │   └── README.md                          # Guide for adding/replacing photos
 │   ├── Beginners_Guide_mmWave_Radar_Fan_RPM.docx # Student learning textbook (from physics to code)
 │   └── Beginners_Guide_mmWave_Radar_Fan_RPM.doc
 │
