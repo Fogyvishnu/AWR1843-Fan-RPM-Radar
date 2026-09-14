@@ -30,12 +30,12 @@ For accurate ceiling fan RPM measurement, sensor geometry is critical:
 
 Use this method to permanently flash the firmware onto the AWR1843BOOST board so it boots and runs autonomously without Code Composer Studio or a JTAG connection.
 
-### Step 1: Set Hardware Jumpers to SOP5 (Flashing Mode)
+### Step 1: Set Hardware Jumpers to Flash Programming Mode (`1 0 1`)
 Set the 3 Sense-On-Power (SOP) jumpers on the AWR1843BOOST:
-- **SOP2**: **OFF** (open / unjumpered)
-- **SOP1**: **OFF** (open / unjumpered)
-- **SOP0**: **ON** (closed / jumpered)
-> Binary State: `[0 0 1]`
+- **SOP 2**: **ON** (closed / jumpered)
+- **SOP 1**: **OFF** (open / unjumpered)
+- **SOP 0**: **ON** (closed / jumpered)
+> Binary State: `[1 0 1]`
 
 ### Step 2: Power Up the Board
 1. Connect a **5V / 2.5A** DC barrel power supply (center-positive, 2.1mm) to the power jack.
@@ -56,25 +56,25 @@ Set the 3 Sense-On-Power (SOP) jumpers on the AWR1843BOOST:
    - UniFlash will erase the QSPI flash sectors and write the multicore image.
    - Wait until you see: `[SUCCESS] Program Load completed successfully`.
 
-### Step 4: Switch to SOP4 (Functional Standalone Mode)
+### Step 4: Switch to Functional Mode (`0 0 1`)
 1. Disconnect the 5V DC power supply.
-2. Remove the **SOP0** jumper so that **all jumpers are OFF**:
-   - **SOP2**: **OFF**
-   - **SOP1**: **OFF**
-   - **SOP0**: **OFF**
-   > Binary State: `[0 0 0]`
+2. Remove the **SOP2** jumper so that only **SOP0** is ON:
+   - **SOP 2**: **OFF** (open / unjumpered)
+   - **SOP 1**: **OFF** (open / unjumpered)
+   - **SOP 0**: **ON** (closed / jumpered)
+   > Binary State: `[0 0 1]`
 3. Reconnect the 5V DC power supply and press the **NRST** button once.
 4. The radar is now permanently programmed and booted!
 
 ### Step 5: Send Chirp Profile & Stream Live RPM
 From your terminal:
 ```bash
-# Pure Bash runner (Linux):
-cd ../out_of_box_1843_mss
-./send_cfg_and_stream.sh /dev/ttyACM0
+# Web Avionics HUD Dashboard (Recommended):
+./start_dashboard.sh
 
-# Or Python visualizer (Cross-platform):
-python3 stream_fan_rpm.py --cli-port /dev/ttyACM0 --data-port /dev/ttyACM1 --config ../prebuilt_binaries/profile_fan_rpm.cfg
+# Or pure Bash runner (Linux CLI):
+cd ../out_of_box_1843_mss
+./send_cfg_and_stream.sh /dev/ttyACM0 profile_fan_rpm_highspeed.cfg
 ```
 
 ---
@@ -83,12 +83,12 @@ python3 stream_fan_rpm.py --cli-port /dev/ttyACM0 --data-port /dev/ttyACM1 --con
 
 Use this method for active source-level debugging, stepping through DSP or Cortex-R4F code, setting breakpoints, and inspecting live variables (`gRpmMeasurement`, `latestRpmEMA`).
 
-### Step 1: Set Hardware Jumpers to SOP2 (Development / JTAG Mode)
+### Step 1: Set Hardware Jumpers to Debug Mode (`0 1 1`)
 Set the 3 Sense-On-Power (SOP) jumpers on the AWR1843BOOST:
-- **SOP2**: **ON** (closed / jumpered)
-- **SOP1**: **OFF** (open / unjumpered)
-- **SOP0**: **ON** (closed / jumpered)
-> Binary State: `[1 0 1]`
+- **SOP 2**: **OFF** (open / unjumpered)
+- **SOP 1**: **ON** (closed / jumpered)
+- **SOP 0**: **ON** (closed / jumpered)
+> Binary State: `[0 1 1]`
 
 ### Step 2: Power Up the Board
 1. Connect 5V / 2.5A DC barrel power and micro-USB.

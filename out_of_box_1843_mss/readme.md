@@ -114,16 +114,16 @@ where $\alpha = 0.20$ provides smooth, responsive readings.
 ### 3.1 AWR1843BOOST Switch / Jumper Configuration
 The AWR1843BOOST EVM uses 3 Sense-On-Power (SOP) jumper pins to set the boot mode:
 
-| Pin / Jumper | SOP2 (Debug / CCS Mode) | SOP5 (Flashing Mode) | SOP4 (Functional Boot) |
-| :--- | :---: | :---: | :---: |
-| **SOP 2** | **ON (Jumper Closed)** | OFF (Jumper Open) | OFF (Jumper Open) |
-| **SOP 1** | OFF (Jumper Open) | OFF (Jumper Open) | OFF (Jumper Open) |
-| **SOP 0** | **ON (Jumper Closed)** | **ON (Jumper Closed)** | OFF (Jumper Open) |
-| **State Binary** | `1 0 1` | `0 0 1` | `0 0 0` |
-| **Purpose** | **Development & Debug via CCS JTAG** | Flashing combined image via UniFlash | Autonomous boot from serial flash |
+| Mode | SOP 2 | SOP 1 | SOP 0 | State Binary | Purpose |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Flash Programming** | **ON** | OFF | **ON** | `1 0 1` | Flashing combined image via UniFlash |
+| **Functional Mode** | OFF | OFF | **ON** | `0 0 1` | Autonomous boot from serial flash |
+| **Debug Mode** | OFF | **ON** | **ON** | `0 1 1` | Development & Debug via CCS JTAG |
 
 > [!IMPORTANT]
-> - For **CCS Debugging** (loading `.xer4f` and `.xe674`), place jumpers on **SOP2** and **SOP0** (leave SOP1 open).
+> - For **Flash Programming**: Place jumpers on **SOP2** and **SOP0** (`1 0 1`).
+> - For **Functional Standalone Run**: Place jumper on **SOP0** only (`0 0 1`).
+> - For **CCS Debugging**: Place jumpers on **SOP1** and **SOP0** (`0 1 1`).
 > - **Power Supply**: Connect a dedicated **5V / 2.5A** (center-positive, 2.1mm) DC barrel jack adapter. Do **not** power the radar solely from USB; chirping requires instantaneous peak currents up to 2.0A that can cause brownouts.
 > - Connect the micro-USB cable from your PC to the EVM (connects to the onboard XDS110 debug probe).
 
@@ -226,8 +226,8 @@ Output binary artifacts:
 
 ## 6. Step-by-Step Debug & Run Guide (CCS JTAG)
 
-### Step 1: Set Jumpers to SOP2 (Debug Mode)
-1. Place jumpers on **SOP2** and **SOP0**. Ensure **SOP1** has no jumper (`1 0 1`).
+### Step 1: Set Jumpers to Debug Mode (`0 1 1`)
+1. Place jumpers on **SOP1** and **SOP0**. Ensure **SOP2** has no jumper (`0 1 1`).
 2. Power on the AWR1843BOOST with the 5V power supply.
 3. Press the **NRST** (Reset) tactile button once to latch the boot pins.
 
@@ -271,7 +271,7 @@ Output binary artifacts:
 While JTAG debugging (Section 6) loads the binaries temporarily into internal RAM for development and code iteration, **TI UniFlash allows you to permanently flash the firmware onto the onboard QSPI serial flash memory**. Once flashed, the radar can operate autonomously in standalone mode on power-up without Code Composer Studio or a JTAG debugger!
 
 ### 7.1 Understanding the Flashing Process vs. JTAG
-| Feature | JTAG Debug Mode (SOP2: `1 0 1`) | UniFlash Flashing Mode (SOP5: `0 0 1`) | Functional Mode (SOP4: `0 0 0`) |
+| Feature | JTAG Debug Mode (`0 1 1`) | UniFlash Flashing Mode (`1 0 1`) | Functional Mode (`0 0 1`) |
 | :--- | :--- | :--- | :--- |
 | **Target Storage** | Internal RAM (Volatile) | Onboard QSPI Flash (Non-Volatile) | Boots from QSPI Flash |
 | **Files Used** | `.xer4f` (MSS) + `.xe674` (DSS) | Combined multicore image (`.bin`) | Runs flashed `.bin` |
@@ -282,13 +282,13 @@ While JTAG debugging (Section 6) loads the binaries temporarily into internal RA
 
 ### 7.2 Step-by-Step Flashing Procedure
 
-#### Step 1: Set Jumpers to SOP5 (Flashing Mode)
+#### Step 1: Set Jumpers to Flash Programming Mode (`1 0 1`)
 1. Disconnect the power supply.
 2. Set the three SOP jumpers on the AWR1843BOOST:
-   - **SOP 2**: **OFF (Open / Removed)**
+   - **SOP 2**: **ON (Closed / Jumper Installed)**
    - **SOP 1**: **OFF (Open / Removed)**
    - **SOP 0**: **ON (Closed / Jumper Installed)**
-   - Binary setting: `[0 0 1]`
+   - Binary setting: `[1 0 1]`
 3. Connect the dedicated **5V / 2.5A** DC power supply to the barrel jack.
 4. Connect the micro-USB cable to your PC.
 5. Press the **NRST** (Reset) tactile button once to latch the bootloader into flashing mode.
@@ -329,19 +329,20 @@ While JTAG debugging (Section 6) loads the binaries temporarily into internal RA
 
 To run the flashed firmware autonomously:
 1. Disconnect the 5V power supply.
-2. Remove the jumper from **SOP0** so that **all three jumpers are OFF**:
-   - **SOP 2**: **OFF (Open)**
-   - **SOP 1**: **OFF (Open)**
-   - **SOP 0**: **OFF (Open)**
-   - Binary setting: `[0 0 0]` (SOP4 Functional Mode)
+2. Remove the jumper from **SOP2** so that only **SOP0** is ON:
+   - **SOP 2**: **OFF (Open / Removed)**
+   - **SOP 1**: **OFF (Open / Removed)**
+   - **SOP 0**: **ON (Closed / Jumper Installed)**
+   - Binary setting: `[0 0 1]` (Functional Mode)
 3. Reconnect the 5V / 2.5A power supply.
 4. Press the **NRST** button once.
 5. The radar now automatically boots from QSPI flash into your fan RPM firmware!
-6. Open your terminal and run the configuration script:
+6. Open your terminal or launch the Web HUD:
    ```bash
-   ./send_cfg_and_stream.sh /dev/ttyACM0
+   ./start_dashboard.sh
+   # Or CLI:
+   ./send_cfg_and_stream.sh /dev/ttyACM0 profile_fan_rpm_highspeed.cfg
    ```
-   The radar starts transmitting chirps and outputs the live RPM directly.
 
 ---
 
@@ -349,10 +350,10 @@ To run the flashed firmware autonomously:
 
 | Error Message | Probable Root Cause | Exact Solution |
 | :--- | :--- | :--- |
-| **`[ERROR] Cortex_R4_0: Initial response from the device was not received`** | 1. Incorrect SOP jumper position.<br>2. Forgot to press NRST.<br>3. Selected the Auxiliary Data Port instead of Application Port. | 1. Verify SOP jumpers are `[0 0 1]` (SOP2 OFF, SOP1 OFF, SOP0 ON).<br>2. Press NRST button.<br>3. Ensure COM port is `/dev/ttyACM0` or the User UART port. |
+| **`[ERROR] Cortex_R4_0: Initial response from the device was not received`** | 1. Incorrect SOP jumper position.<br>2. Forgot to press NRST.<br>3. Selected the Auxiliary Data Port instead of Application Port. | 1. Verify SOP jumpers are `[1 0 1]` (SOP2 ON, SOP1 OFF, SOP0 ON).<br>2. Press NRST button.<br>3. Ensure COM port is `/dev/ttyACM0` or the User UART port. |
 | **`Permission denied: '/dev/ttyACM0'`** | User does not have serial port access rights on Linux. | Run `sudo usermod -a -G uucp $USER` on Arch Linux (or `dialout` on Ubuntu) and then run `newgrp uucp`. |
 | **`[ERROR] Failed to open COM port`** | Port is currently held open by another application. | Close any running serial terminals (Minicom, screen, PuTTY, `send_cfg_and_stream.sh`, Python scripts). |
-| **Radar does not boot after flashing** | Board left in SOP5 Flashing mode. | Remove all SOP jumpers (`0 0 0` Functional mode) and press NRST. |
+| **Radar does not boot after flashing** | Board left in Flash Programming mode (`1 0 1`). | Remove SOP2 jumper (`0 0 1` Functional mode) and press NRST. |
 
 ---
 

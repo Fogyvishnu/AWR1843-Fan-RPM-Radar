@@ -103,9 +103,9 @@ The AWR1843BOOST EVM uses 3 Sense-On-Power (SOP) jumper pins to set the hardware
 
 | Mode | SOP 2 | SOP 1 | SOP 0 | State Binary | Purpose |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **SOP 2 (Development)** | **ON** | OFF | **ON** | `1 0 1` | **Live JTAG Debug Mode via CCS** (Loads `.xer4f` and `.xe674` directly into RAM) |
-| **SOP 5 (Flashing)** | OFF | OFF | **ON** | `0 0 1` | **Flashing Mode via TI UniFlash** (Burns `awr1843_fan_rpm.bin` into QSPI flash) |
-| **SOP 4 (Functional)** | OFF | OFF | OFF | `0 0 0` | **Standalone Boot Mode** (Autonomously runs flashed firmware on power-up) |
+| **Flash Programming** | **ON** | OFF | **ON** | `1 0 1` | **Flashing Mode via TI UniFlash** (Burns `awr1843_fan_rpm.bin` into QSPI flash) |
+| **Functional Mode** | OFF | OFF | **ON** | `0 0 1` | **Autonomous Boot Mode** (Runs flashed firmware on power-up) |
+| **Debug Mode** | OFF | **ON** | **ON** | `0 1 1` | **Live JTAG Debug Mode via CCS** (Loads `.xer4f` and `.xe674` directly into RAM) |
 
 > [!IMPORTANT]
 > **Power Supply Requirement**: Connect a dedicated **5V / 2.5A** (center-positive, 2.1mm) DC barrel jack adapter. Do **NOT** attempt to operate the radar solely from USB power; FMCW chirping demands up to 2.0A instantaneous peak current which will cause USB brownout resets.
@@ -124,10 +124,10 @@ Choose the path that fits your workflow:
                      ┌────────────────┴────────────────┐
                      ▼ YES                             ▼ NO
             [ Path B: CCS Debug ]              [ Path A: UniFlash ]
-            • Set Jumpers: [1 0 1]             • Set Jumpers: [0 0 1]
+            • Set Jumpers: [0 1 1]             • Set Jumpers: [1 0 1]
             • Open CCS Target Config           • Open TI UniFlash
             • Load .xer4f & .xe674 into RAM    • Burn awr1843_fan_rpm.bin to Flash
-            • Run & inspect live variables     • Remove jumpers [0 0 0] & reset
+            • Run & inspect live variables     • Switch jumpers to [0 0 1] & reset
 ```
 
 ---
@@ -136,12 +136,12 @@ Choose the path that fits your workflow:
 
 This method writes the unified multicore image into the onboard QSPI serial flash memory so the radar operates autonomously without CCS.
 
-#### Step 1: Set Jumpers to SOP5 (Flashing Mode)
-Place a jumper cap on **SOP0** only:
-- **SOP 2**: **OFF** (Open)
+#### Step 1: Set Jumpers to Flash Programming Mode (`1 0 1`)
+Place jumper caps on **SOP2** and **SOP0**:
+- **SOP 2**: **ON** (Closed)
 - **SOP 1**: **OFF** (Open)
 - **SOP 0**: **ON** (Closed)
-> Binary State: `[0 0 1]`
+> Binary State: `[1 0 1]`
 
 #### Step 2: Power Up & Connect
 1. Connect the **5V / 2.5A DC power supply** to the barrel jack.
@@ -173,13 +173,13 @@ Place a jumper cap on **SOP0** only:
    [SUCCESS] Program Load completed successfully
    ```
 
-#### Step 6: Switch to SOP4 (Functional Mode) & Run
+#### Step 6: Switch to Functional Mode (`0 0 1`) & Run
 1. Disconnect the 5V DC power supply.
-2. Remove the **SOP0** jumper so that **all three jumpers are OFF**:
-   - **SOP 2**: **OFF**
-   - **SOP 1**: **OFF**
-   - **SOP 0**: **OFF**
-   > Binary State: `[0 0 0]`
+2. Remove the **SOP2** jumper so that only **SOP0** is ON:
+   - **SOP 2**: **OFF** (Open)
+   - **SOP 1**: **OFF** (Open)
+   - **SOP 0**: **ON** (Closed)
+   > Binary State: `[0 0 1]`
 3. Reconnect the 5V DC power supply.
 4. Press the **NRST** button once.
 5. The radar boots autonomously from flash and is ready for chirp commands! Proceed to [Section 6](#6-live-console-monitoring--uart-streaming).
@@ -190,12 +190,12 @@ Place a jumper cap on **SOP0** only:
 
 This method allows active source-level debugging, variable inspection (`gRpmMeasurement`, `latestRpmEMA`), breakpoints, and profiling.
 
-#### Step 1: Set Jumpers to SOP2 (Development / JTAG Mode)
-Place jumper caps on **SOP2** and **SOP0**:
-- **SOP 2**: **ON** (Closed)
-- **SOP 1**: **OFF** (Open)
+#### Step 1: Set Jumpers to Debug Mode (`0 1 1`)
+Place jumper caps on **SOP1** and **SOP0**:
+- **SOP 2**: **OFF** (Open)
+- **SOP 1**: **ON** (Closed)
 - **SOP 0**: **ON** (Closed)
-> Binary State: `[1 0 1]`
+> Binary State: `[0 1 1]`
 
 #### Step 2: Power Up & Connect
 1. Connect 5V / 2.5A DC power and micro-USB.
