@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TI AWR1843BOOST | mmWave Radar Fan Tachometer</title>
+  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="radar-hud">
+
+  <!-- HUD Grid & Radar Sweep Background Effect -->
+  <div class="hud-background">
+    <div class="grid-overlay"></div>
+    <div class="radar-scanline"></div>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <header class="hud-header">
+    <div class="header-left">
+      <div class="radar-pulse-icon">
+        <span class="pulse-ring"></span>
+        <span class="pulse-dot"></span>
+      </div>
+      <div class="header-titles">
+        <h1 class="main-title">AWR1843<span>BOOST</span></h1>
+        <p class="subtitle">77 GHz mmWave FMCW Doppler Radar Tachometer</p>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="status-badge" id="connStatusBadge">
+        <span class="badge-dot dot-offline"></span>
+        <span class="badge-text" id="connStatusText">DISCONNECTED</span>
+      </div>
+      <div class="status-badge" id="sensorStatusBadge">
+        <span class="badge-dot dot-idle"></span>
+        <span class="badge-text" id="sensorStatusText">SENSOR IDLE</span>
+      </div>
+      <div class="status-badge sim-badge" id="simBadge" style="display: none;">
+        <span class="badge-dot dot-sim"></span>
+        <span class="badge-text">SIMULATION MODE</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="telemetry-pill">
+        <span class="pill-label">FPS:</span>
+        <span class="pill-val" id="fpsDisplay">-- Hz</span>
+      </div>
+      <div class="telemetry-pill">
+        <span class="pill-label">TIME:</span>
+        <span class="pill-val" id="clockDisplay">00:00:00</span>
+      </div>
+      <button class="hud-btn btn-outline" id="btnToggleSim" title="Toggle Demo Simulation Mode">
+        <span class="icon">⚡</span> Demo Mode
+      </button>
+      <button class="hud-btn btn-outline" id="btnToggleConsole" title="Toggle Raw Serial Console">
+        <span class="icon">📟</span> Log Console
+      </button>
+    </div>
+  </header>
+
+  <!-- Main HUD Dashboard Container -->
+  <main class="hud-main">
+
+    <!-- Top Left: Primary Tachometer Gauge & Fan Status -->
+    <section class="hud-panel panel-gauge">
+      <div class="panel-header">
+        <h2 class="panel-title"><span class="title-decor"></span>LIVE TACHOMETER GAUGE</h2>
+        <span class="panel-tag">60 FPS REAL-TIME</span>
+      </div>
+
+      <div class="gauge-wrapper">
+        <canvas id="tachometerCanvas" width="420" height="420"></canvas>
+      </div>
+
+      <!-- Large Pulsing Status Indicator -->
+      <div class="fan-status-container">
+        <div class="fan-status-box status-stopped" id="fanStatusBox">
+          <span class="status-led"></span>
+          <span class="status-label" id="fanStatusLabel">STOPPED / IDLE</span>
+        </div>
+      </div>
+
+      <!-- Primary Telemetry 3-Card Grid -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-icon">🎯</span>
+            <span class="metric-label">TARGET DISTANCE</span>
+          </div>
+          <div class="metric-val" id="valDistance">-- <span class="unit">m</span></div>
+          <div class="metric-bar-wrap">
+            <div class="metric-bar" id="barDistance" style="width: 0%;"></div>
+          </div>
+          <div class="metric-sub" id="subDistance">Range Bin: --</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-icon">📶</span>
+            <span class="metric-label">SIGNAL-TO-NOISE</span>
+          </div>
+          <div class="metric-val" id="valSnr">-- <span class="unit">dB</span></div>
+          <div class="metric-bar-wrap">
+            <div class="metric-bar bar-snr" id="barSnr" style="width: 0%;"></div>
+          </div>
+          <div class="metric-sub" id="subSnr">Quality: --</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-icon">🚀</span>
+            <span class="metric-label">BLADE TIP VELOCITY</span>
+          </div>
+          <div class="metric-val" id="valTipVel">-- <span class="unit">m/s</span></div>
+          <div class="metric-bar-wrap">
+            <div class="metric-bar bar-vel" id="barTipVel" style="width: 0%;"></div>
+          </div>
+          <div class="metric-sub" id="subTipVel">-- km/h</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Top Right: Real-Time Scrolling Charts & Radar Controls -->
+    <div class="hud-right-col">
+
+      <!-- Real-Time Scrolling Time Series Charts -->
+      <section class="hud-panel panel-charts">
+        <div class="panel-header">
+          <div class="chart-title-wrap">
+            <h2 class="panel-title"><span class="title-decor"></span>RPM TIME SERIES (LAST 60s)</h2>
+            <div class="chart-stats-pill">
+              <span>MIN: <b id="statMinRpm">0.0</b></span>
+              <span>AVG: <b id="statAvgRpm">0.0</b></span>
+              <span>MAX: <b id="statMaxRpm">0.0</b></span>
+            </div>
+          </div>
+          <div class="chart-controls">
+            <button class="chart-btn active" data-range="60">60s</button>
+            <button class="chart-btn" data-range="30">30s</button>
+            <button class="chart-btn" data-range="15">15s</button>
+          </div>
+        </div>
+
+        <div class="chart-wrapper">
+          <canvas id="rpmChartCanvas" height="150"></canvas>
+        </div>
+
+        <!-- Secondary Telemetry Dual-Chart (SNR & Tip Velocity) -->
+        <div class="secondary-chart-header">
+          <span class="sub-chart-label">MICRO-DOPPLER TIP VELOCITY & SNR HISTORY</span>
+          <div class="legend-wrap">
+            <span class="legend-item"><span class="legend-color color-vel"></span>Tip Vel (m/s)</span>
+            <span class="legend-item"><span class="legend-color color-snr"></span>SNR (dB)</span>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="telemetryChartCanvas" height="110"></canvas>
+        </div>
+      </section>
+
+      <!-- Bottom Control Panels Grid -->
+      <div class="controls-grid">
+
+        <!-- Card 1: Hardware Connection -->
+        <section class="hud-panel panel-sub">
+          <div class="panel-header">
+            <h3 class="panel-title-sm">📡 RADAR CONNECTION</h3>
+            <button class="icon-btn" id="btnRefreshPorts" title="Refresh available COM ports">🔄</button>
+          </div>
+          <div class="control-form">
+            <div class="form-group">
+              <label for="selectPort">Serial Port (Application / User UART):</label>
+              <select id="selectPort" class="hud-select">
+                <option value="">Scanning ports...</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="selectBaud">Baud Rate:</label>
+                <select id="selectBaud" class="hud-select">
+                  <option value="115200" selected>115200 (Default)</option>
+                  <option value="921600">921600</option>
+                </select>
+              </div>
+              <div class="form-group btn-align">
+                <button class="hud-btn btn-primary" id="btnConnect">CONNECT</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Card 2: Chirp Profile & Sensor Control -->
+        <section class="hud-panel panel-sub">
+          <div class="panel-header">
+            <h3 class="panel-title-sm">⚡ SENSOR CONTROL</h3>
+          </div>
+          <div class="control-form">
+            <div class="form-group">
+              <label for="selectProfile">Chirp Profile Configuration:</label>
+              <select id="selectProfile" class="hud-select">
+                <option value="profile_fan_rpm_highspeed.cfg">profile_fan_rpm_highspeed.cfg (1-TX, 400+ RPM)</option>
+                <option value="profile_fan_rpm.cfg">profile_fan_rpm.cfg (2-TX Standard)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <button class="hud-btn btn-action" id="btnStartSensor">
+                <span class="icon">▶</span> START RADAR
+              </button>
+              <button class="hud-btn btn-danger" id="btnStopSensor">
+                <span class="icon">⏹</span> STOP SENSOR
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Card 3: Live Calibration (Radius & Aspect Angle) -->
+        <section class="hud-panel panel-sub">
+          <div class="panel-header">
+            <h3 class="panel-title-sm">📐 LIVE CALIBRATION</h3>
+            <span class="panel-tag-live">ON-THE-FLY</span>
+          </div>
+          <div class="control-form">
+            <div class="form-group">
+              <div class="slider-label-row">
+                <label for="sliderRadius">Blade Radius (R):</label>
+                <span class="slider-val-display" id="displayRadius">0.60 m</span>
+              </div>
+              <input type="range" id="sliderRadius" min="0.10" max="1.20" step="0.01" value="0.60" class="hud-slider">
+            </div>
+            <div class="form-group">
+              <div class="slider-label-row">
+                <label for="sliderAngle">Radar Aspect Angle (θ):</label>
+                <span class="slider-val-display" id="displayAngle">30 °</span>
+              </div>
+              <input type="range" id="sliderAngle" min="0" max="60" step="1" value="30" class="hud-slider">
+            </div>
+          </div>
+        </section>
+
+        <!-- Card 4: Session Logger & CSV Export -->
+        <section class="hud-panel panel-sub">
+          <div class="panel-header">
+            <h3 class="panel-title-sm">💾 DATA RECORDER</h3>
+            <span class="record-indicator" id="recordIndicator">● IDLE</span>
+          </div>
+          <div class="control-form">
+            <div class="sample-counter-row">
+              <span class="counter-label">Samples Logged:</span>
+              <span class="counter-val" id="logSampleCount">0</span>
+            </div>
+            <div class="form-row">
+              <button class="hud-btn btn-secondary" id="btnToggleRecord">
+                <span class="icon">⏺</span> START RECORD
+              </button>
+              <button class="hud-btn btn-outline" id="btnExportCsv">
+                <span class="icon">📥</span> EXPORT CSV
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </div> <!-- /controls-grid -->
+
+    </div> <!-- /hud-right-col -->
+
+  </main>
+
+  <!-- Collapsible Raw Serial Console Log Drawer -->
+  <footer class="hud-console-drawer" id="consoleDrawer">
+    <div class="console-header">
+      <div class="console-title">
+        <span class="console-icon">💻</span>
+        RADAR SERIAL LOG STREAM
+      </div>
+      <div class="console-actions">
+        <label class="checkbox-label">
+          <input type="checkbox" id="chkAutoScroll" checked> Auto-scroll
+        </label>
+        <button class="console-btn" id="btnClearLogs">Clear</button>
+        <button class="console-btn btn-close" id="btnCloseConsole">✕</button>
+      </div>
+    </div>
+    <div class="console-body" id="consoleBody">
+      <div class="console-line system">[SYSTEM] AWR1843BOOST Radar Tachometer Web HUD Initialized.</div>
+      <div class="console-line info">[INFO] Select your serial port and click CONNECT or enable DEMO MODE.</div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/gauge.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -79,9 +79,18 @@ Unlike typical radar demonstrations that capture raw ADC data and process it off
 │   └── isk/                                  # Build output directory
 │       └── out_of_box_1843_dss_isk.xe674     # Compiled C674x DSP binary
 │
+├── dashboard/                                # Modern Web Avionics HUD Control Dashboard
+│   ├── app.py                                # Zero-dependency HTTP + SSE backend server
+│   ├── static/                               # Cyberpunk HUD frontend (HTML5 / CSS / Canvas)
+│   │   ├── index.html                        # Dashboard layout
+│   │   ├── css/dashboard.css                 # HUD glassmorphism styling & animations
+│   │   └── js/                               # 60fps Canvas gauge, scrolling charts, controller
+│   └── README.md                             # Dashboard guide & feature walkthrough
+│
 ├── tools/                                     # Tooling & Image Packaging
 │   └── package_multicore_bin.py              # Generates UniFlash-compatible multicore .bin on Linux
 │
+├── start_dashboard.sh                        # 1-click launcher for the Web HUD
 ├── .gitignore                                 # Excludes build objects and IDE caches
 └── README.md                                  # Repository overview (this file)
 ```
@@ -231,45 +240,48 @@ In the CCS **Debug** view:
 
 Once the radar is running (either via UniFlash Flash boot or CCS Debug load), stream live RPM directly in your terminal without any web visualizers.
 
-### Method 1: Pure-Bash Arch Linux CLI Runner (Zero Dependencies!)
+### Method 1: Web Avionics HUD Dashboard (⭐ Recommended!)
+
+A high-tech, responsive Cyberpunk Military Avionics HUD dashboard running locally in your web browser:
+- **60 FPS Canvas Radial Speedometer**: Smooth needle physics, color-coded speed zones, glowing digital RPM.
+- **Pulsing Fan Status Badge**: Real-time `FAN RUNNING` or `STOPPED / IDLE` indicator.
+- **Live Telemetry Cards**: Target Distance ($m$), Signal-to-Noise Ratio ($dB$), and Blade Tip Velocity ($m/s$, $km/h$).
+- **Live Scrolling Strip Charts**: Real-time 60s RPM waveform and dual Tip Velocity / SNR telemetry history.
+- **Hardware Controls**: Serial port auto-scanner, chirp profile selector, 1-click sensor start/stop.
+- **Live Calibration**: Adjust Blade Radius ($R$) and Radar Aspect Angle ($\theta$) on-the-fly without firmware recompilation.
+- **Session Data Recorder**: One-click CSV export of all logged telemetry points.
+- **Demo Simulation Mode**: Test all animations and features even without the physical radar connected!
+
+```bash
+# 1-Click Launch:
+./start_dashboard.sh
+
+# Or run directly via Python:
+python3 dashboard/app.py
+
+# Or test in Demo Simulation Mode immediately (no hardware needed):
+python3 dashboard/app.py --sim
+```
+*Open your browser at **`http://localhost:8055`**.*
+
+---
+
+### Method 2: Pure-Bash Arch Linux CLI Runner (Zero Dependencies!)
 A self-contained script [`out_of_box_1843_mss/send_cfg_and_stream.sh`](out_of_box_1843_mss/send_cfg_and_stream.sh) configures the serial port, uploads the chirp profile, and displays live RPM in color:
 
 ```bash
 cd out_of_box_1843_mss
-./send_cfg_and_stream.sh /dev/ttyACM0
+./send_cfg_and_stream.sh /dev/ttyACM0 profile_fan_rpm_highspeed.cfg
 ```
 
-**Live Output:**
-```text
-==========================================================
-    Arch Linux AWR1843BOOST Fan RPM Console Monitor
-==========================================================
- Port:        /dev/ttyACM0
- Baud Rate:   115200
- Config File: profile_fan_rpm.cfg
-==========================================================
-[1/2] Sending configuration to radar via /dev/ttyACM0...
-  --> sensorStop
-  --> flushCfg
-  --> dfeDataOutputMode 1
-  ...
-  --> sensorStart
-[2/2] Configuration uploaded! Sensor is active.
----------------------------------------------------------
- TIMESTAMP   | LIVE FAN SPEED       | STATUS
----------------------------------------------------------
- 23:30:01    | RPM: 1248.5          | FAN RUNNING
- 23:30:02    | RPM: 1249.1          | FAN RUNNING
- 23:30:03    | RPM: 1250.0          | FAN RUNNING
- 23:30:04    | RPM: 1249.6          | FAN RUNNING
-```
-*Press **Ctrl+C** at any time to cleanly stop chirping and exit.*
+---
 
-### Method 2: Python Serial Dashboard
+### Method 3: Python Serial CLI Monitor
 For cross-platform systems (Linux/Windows/macOS):
 ```bash
-python3 out_of_box_1843_mss/stream_fan_rpm.py --cli-port /dev/ttyACM0 --data-port /dev/ttyACM1 --config prebuilt_binaries/profile_fan_rpm.cfg
+python3 out_of_box_1843_mss/stream_fan_rpm.py --port /dev/ttyACM0 --cfg out_of_box_1843_mss/profile_fan_rpm_highspeed.cfg
 ```
+
 
 ---
 
