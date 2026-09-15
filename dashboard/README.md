@@ -42,30 +42,50 @@ Designed with a high-contrast cyberpunk dark HUD aesthetic, smooth hardware-acce
    - **Signal-to-Noise Ratio (SNR)**: Real-time blade reflection strength in $\text{dB}$ with signal quality grading (*Excellent*, *Good*, *Marginal*).
    - **Blade Tip Velocity**: Instantaneous linear tip velocity along radar line of sight ($m/s$, $km/h$, $mph$).
 
-3. **Live Scrolling Strip-Charts**:
+3. **Interactive 3D Spinning Fan & Radar Beam Visualizer (WebGL / Three.js)**:
+   - Real-time 3D ceiling fan model that spins at the exact measured RPM with realistic angular velocity integration.
+   - Dynamic motion blur trail / ghosting disc scaled to rotation rate.
+   - Virtual AWR1843BOOST radar PCB with animated 77 GHz mmWave radar beam cone and specular blade reflection pings.
+   - Camera presets (Isometric, Top-Down, Radar Line-of-Sight), wireframe mode, stroboscopic freeze mode, and blade count selector (3, 4, 5 blades).
+   - Seamless view switching: **GAUGE ONLY**, **3D RADAR**, or **DUAL SPLIT VIEW**.
+
+4. **Live Micro-Doppler & 2D Range-Doppler Heatmap Spectrogram**:
+   - High-performance canvas radar DSP spectrogram engine running at 60 FPS.
+   - **Micro-Doppler Waterfall Mode**: Scrolling time-frequency waterfall ($f_d$ vs. $t$) displaying characteristic periodic blade Doppler flashes.
+   - **Range-Doppler 2D Matrix Mode**: Heatmap matrix showing target range bin and blade velocity dispersion spread ($\pm v_{\text{tip}} \cos(\theta)$).
+   - Real-time instantaneous Doppler slice profile with CFAR detection threshold.
+   - Selectable color palettes: **Cyberpunk Neon**, **Thermal Jet**, and **Phosphor Green**.
+
+5. **Doppler Acoustic Synthesizer (Web Audio API)**:
+   - Translates radar micro-Doppler frequency shifts into acoustic sound.
+   - Rhythmic aerodynamic blade whoosh at the Blade Passage Frequency ($f_{\text{BPF}} = N \cdot \frac{\text{RPM}}{60}$).
+   - Frequency-modulated Doppler carrier whine tracking blade tip velocity.
+   - One-click mute/unmute toggle in header with pulsing audio indicator.
+
+6. **Live Scrolling Strip-Charts**:
    - Time-series waveform over selectable time windows ($15s$, $30s$, $60s$).
    - Real-time Min, Average, and Max RPM telemetry statistics.
    - Dual-trace micro-Doppler history chart tracking Tip Velocity and SNR.
 
-4. **Hardware Radar Control & Auto-Detection**:
+7. **Hardware Radar Control & Auto-Detection**:
    - Auto-scans Linux USB `/dev/ttyACM*` and `/dev/ttyUSB*` ports and Windows `COM*` ports.
    - One-click profile uploader: uploads `.cfg` commands with the required $40\text{ ms}$ CLI pacing and initiates radar transmission.
    - Instant sensor stop (`sensorStop`) button.
 
-5. **On-The-Fly Dynamic Calibration**:
+8. **On-The-Fly Dynamic Calibration**:
    - Adjust **Blade Radius** ($0.10\text{ m}$ to $1.20\text{ m}$) and **Radar Aspect Angle** ($0^\circ$ to $60^\circ$) in real-time.
    - Telemetry recalculates immediately on client and server without recompiling or flashing firmware!
 
-6. **Data Logger & CSV Export**:
+9. **Data Logger & CSV Export**:
    - Real-time session data recorder.
    - One-click export to standard CSV (`awr1843_fan_rpm_log_YYYYMMDD_HHMMSS.csv`) for laboratory analysis in MATLAB, Python, or Excel.
 
-7. **Built-in Demo Simulation Mode**:
-   - Test and demonstrate the complete UI immediately without physical radar hardware.
-   - Simulates rotational aerodynamics, blade acceleration/deceleration, micro-Doppler turbulence, and range noise.
+10. **Built-in Demo Simulation Mode**:
+    - Test and demonstrate the complete UI immediately without physical radar hardware.
+    - Simulates rotational aerodynamics, blade acceleration/deceleration, micro-Doppler turbulence, and range noise.
 
-8. **Collapsible Raw Serial Debug Console**:
-   - Inspect raw radar UART lines directly inside the web interface with color-coded syntax and auto-scrolling.
+11. **Collapsible Raw Serial Debug Console**:
+    - Inspect raw radar UART lines directly inside the web interface with color-coded syntax and auto-scrolling.
 
 ---
 

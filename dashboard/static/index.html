@@ -54,6 +54,9 @@
         <span class="pill-label">TIME:</span>
         <span class="pill-val" id="clockDisplay">00:00:00</span>
       </div>
+      <button class="hud-btn btn-outline" id="btnToggleAudio" title="Toggle Doppler Audio Synthesizer">
+        <span class="icon" id="audioIcon">🔇</span> Audio
+      </button>
       <button class="hud-btn btn-outline" id="btnToggleSim" title="Toggle Demo Simulation Mode">
         <span class="icon">⚡</span> Demo Mode
       </button>
@@ -66,15 +69,41 @@
   <!-- Main HUD Dashboard Container -->
   <main class="hud-main">
 
-    <!-- Top Left: Primary Tachometer Gauge & Fan Status -->
-    <section class="hud-panel panel-gauge">
+    <!-- Top Left: Primary Tachometer Gauge & 3D Radar View -->
+    <section class="hud-panel panel-gauge" id="panelGaugeSection">
       <div class="panel-header">
-        <h2 class="panel-title"><span class="title-decor"></span>LIVE TACHOMETER GAUGE</h2>
+        <div class="view-switch-wrap">
+          <h2 class="panel-title"><span class="title-decor"></span>RADAR TACHOMETER</h2>
+          <div class="view-tabs">
+            <button class="view-tab-btn active" id="tabViewGauge" title="2D Radial Speedometer Gauge">GAUGE</button>
+            <button class="view-tab-btn" id="tabView3D" title="Interactive 3D Fan & mmWave Radar Beam">3D RADAR</button>
+            <button class="view-tab-btn" id="tabViewSplit" title="Dual Split View">SPLIT</button>
+          </div>
+        </div>
         <span class="panel-tag">60 FPS REAL-TIME</span>
       </div>
 
-      <div class="gauge-wrapper">
+      <!-- Container for 2D Speedometer Gauge -->
+      <div class="gauge-wrapper" id="gaugeWrapper">
         <canvas id="tachometerCanvas" width="420" height="420"></canvas>
+      </div>
+
+      <!-- Container for Interactive 3D Spinning Fan & Radar Beam -->
+      <div class="fan3d-wrapper" id="fan3dWrapper" style="display: none;">
+        <div class="fan3d-controls-overlay">
+          <div class="fan3d-btn-group">
+            <button class="fan3d-btn active" id="btn3dIso" data-preset="isometric" title="Isometric Perspective">ISO</button>
+            <button class="fan3d-btn" id="btn3dTop" data-preset="top" title="Ceiling Top-Down View">TOP</button>
+            <button class="fan3d-btn" id="btn3dRadar" data-preset="radar" title="Radar Line-of-Sight View">RADAR</button>
+          </div>
+          <div class="fan3d-btn-group">
+            <button class="fan3d-btn active" id="btnToggleBeam" title="Toggle mmWave Radar Beam Frustum">BEAM</button>
+            <button class="fan3d-btn" id="btnToggleStrobe" title="Optical Stroboscope Effect">STROBE</button>
+            <button class="fan3d-btn" id="btnToggleWireframe" title="Wireframe Mesh">WIRE</button>
+            <button class="fan3d-btn" id="btnToggleBlades" title="Cycle Blade Count (3/4/5)">3 BLADES</button>
+            <button class="fan3d-btn icon-only" id="btnReset3dCam" title="Reset Camera Orientation">🔄</button>
+          </div>
+        </div>
       </div>
 
       <!-- Large Pulsing Status Indicator -->
@@ -160,6 +189,31 @@
         </div>
         <div class="chart-wrapper">
           <canvas id="telemetryChartCanvas" height="110"></canvas>
+        </div>
+      </section>
+ 
+      <!-- Real-Time Micro-Doppler & Range-Doppler Heatmap Spectrogram -->
+      <section class="hud-panel panel-spectrogram">
+        <div class="panel-header">
+          <div class="chart-title-wrap">
+            <h2 class="panel-title"><span class="title-decor"></span>MICRO-DOPPLER & RANGE-DOPPLER DSP</h2>
+            <div class="spec-mode-tabs">
+              <button class="spec-tab-btn active" id="btnSpecWaterfall" title="Time vs. Doppler Frequency Waterfall">WATERFALL [t vs fd]</button>
+              <button class="spec-tab-btn" id="btnSpecRangeDoppler" title="2D Range vs. Velocity Matrix">RANGE-DOPPLER [R vs v]</button>
+            </div>
+          </div>
+          <div class="spec-controls">
+            <button class="spec-btn" id="btnCyclePalette" title="Cycle Color Map (Cyberpunk Neon / Jet / Green)">🎨 PALETTE</button>
+            <button class="spec-btn" id="btnFreezeSpec" title="Freeze / Resume Live Spectrogram Stream">❄️ FREEZE</button>
+            <div class="gain-control-wrap">
+              <span class="gain-label">GAIN:</span>
+              <input type="range" id="sliderSpecGain" min="0.5" max="2.5" step="0.1" value="1.0" class="mini-slider" title="Doppler Intensity Gain">
+            </div>
+          </div>
+        </div>
+
+        <div class="spectrogram-wrapper">
+          <canvas id="spectrogramCanvas" height="190"></canvas>
         </div>
       </section>
 
@@ -292,7 +346,11 @@
   </footer>
 
   <!-- Scripts -->
+  <script src="js/vendor/three.min.js"></script>
   <script src="js/gauge.js"></script>
+  <script src="js/fan3d.js"></script>
+  <script src="js/spectrogram.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/charts.js"></script>
   <script src="js/app.js"></script>
 </body>

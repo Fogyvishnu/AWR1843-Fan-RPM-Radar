@@ -5,10 +5,13 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize Visual Gauges & Charts
+  // Initialize Visual Gauges, 3D Fan, Spectrogram & Charts
   const gauge = new TachometerGauge('tachometerCanvas');
   const rpmChart = new RpmStripChart('rpmChartCanvas');
   const telemChart = new TelemetryDualChart('telemetryChartCanvas');
+  const fan3d = new Fan3DViewer('fan3dWrapper');
+  const spectrogram = new MicroDopplerSpectrogram('spectrogramCanvas');
+  const audioSynth = new DopplerAudioSynthesizer();
 
   // DOM Elements
   const connBadge = document.getElementById('connStatusBadge');
@@ -18,6 +21,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const simBadge = document.getElementById('simBadge');
   const clockDisplay = document.getElementById('clockDisplay');
   const fpsDisplay = document.getElementById('fpsDisplay');
+
+  // View Switcher & 3D Fan Elements
+  const panelGaugeSection = document.getElementById('panelGaugeSection');
+  const gaugeWrapper = document.getElementById('gaugeWrapper');
+  const fan3dWrapper = document.getElementById('fan3dWrapper');
+  const tabViewGauge = document.getElementById('tabViewGauge');
+  const tabView3D = document.getElementById('tabView3D');
+  const tabViewSplit = document.getElementById('tabViewSplit');
+
+  const btn3dIso = document.getElementById('btn3dIso');
+  const btn3dTop = document.getElementById('btn3dTop');
+  const btn3dRadar = document.getElementById('btn3dRadar');
+  const btnToggleBeam = document.getElementById('btnToggleBeam');
+  const btnToggleStrobe = document.getElementById('btnToggleStrobe');
+  const btnToggleWireframe = document.getElementById('btnToggleWireframe');
+  const btnToggleBlades = document.getElementById('btnToggleBlades');
+  const btnReset3dCam = document.getElementById('btnReset3dCam');
+
+  // Spectrogram Elements
+  const btnSpecWaterfall = document.getElementById('btnSpecWaterfall');
+  const btnSpecRangeDoppler = document.getElementById('btnSpecRangeDoppler');
+  const btnCyclePalette = document.getElementById('btnCyclePalette');
+  const btnFreezeSpec = document.getElementById('btnFreezeSpec');
+  const sliderSpecGain = document.getElementById('sliderSpecGain');
+
+  // Audio Synthesizer Elements
+  const btnToggleAudio = document.getElementById('btnToggleAudio');
+  const audioIcon = document.getElementById('audioIcon');
 
   const fanStatusBox = document.getElementById('fanStatusBox');
   const fanStatusLabel = document.getElementById('fanStatusLabel');
@@ -113,8 +144,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.type === 'telemetry') {
       packetCounter++;
 
-      // 1. Update Gauge & Fan Status Box
+      // 1. Update Gauge, 3D Fan, Spectrogram & Audio Synthesizer
       gauge.setRpm(data.rpm, data.is_running);
+      fan3d.setRpm(data.rpm, data.is_running);
+      if (data.radius !== undefined) fan3d.setBladeRadius(data.radius);
+      if (data.angle !== undefined) fan3d.setAspectAngle(data.angle);
+      if (data.dist !== undefined) fan3d.setTargetDistance(data.dist);
+      spectrogram.setTelemetry(data);
+      audioSynth.setRpm(data.rpm, data.is_running);
 
       if (data.is_running && data.rpm > 10.0) {
         fanStatusBox.className = 'fan-status-box status-running';
@@ -219,11 +256,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.radius !== undefined) {
       sliderRadius.value = data.radius;
       displayRadius.innerText = `${data.radius.toFixed(2)} m`;
+      fan3d.setBladeRadius(data.radius);
+      spectrogram.setTelemetry({ radius: data.radius });
     }
 
     if (data.angle !== undefined) {
       sliderAngle.value = data.angle;
       displayAngle.innerText = `${Math.round(data.angle)} °`;
+      fan3d.setAspectAngle(data.angle);
+      spectrogram.setTelemetry({ angle: data.angle });
     }
   }
 
@@ -369,12 +410,16 @@ document.addEventListener('DOMContentLoaded', () => {
   sliderRadius.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
     displayRadius.innerText = `${val.toFixed(2)} m`;
+    fan3d.setBladeRadius(val);
+    spectrogram.setTelemetry({ radius: val });
     sendCalibration();
   });
 
   sliderAngle.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
     displayAngle.innerText = `${Math.round(val)} °`;
+    fan3d.setAspectAngle(val);
+    spectrogram.setTelemetry({ angle: val });
     sendCalibration();
   });
 
@@ -495,6 +540,119 @@ document.addEventListener('DOMContentLoaded', () => {
       consoleBody.scrollTop = consoleBody.scrollHeight;
     }
   }
+
+  // ----------------------------------------------------------------------------
+  // View Switcher (GAUGE / 3D RADAR / SPLIT)
+  // ----------------------------------------------------------------------------
+  function setViewMode(mode) {
+    tabViewGauge.classList.toggle('active', mode === 'gauge');
+    tabView3D.classList.toggle('active', mode === '3d');
+    tabViewSplit.classList.toggle('active', mode === 'split');
+
+    if (mode === 'gauge') {
+      gaugeWrapper.style.display = 'flex';
+      fan3dWrapper.style.display = 'none';
+      panelGaugeSection.classList.remove('view-mode-split');
+    } else if (mode === '3d') {
+      gaugeWrapper.style.display = 'none';
+      fan3dWrapper.style.display = 'flex';
+      panelGaugeSection.classList.remove('view-mode-split');
+      fan3d.resize();
+    } else if (mode === 'split') {
+      gaugeWrapper.style.display = 'flex';
+      fan3dWrapper.style.display = 'flex';
+      panelGaugeSection.classList.add('view-mode-split');
+      fan3d.resize();
+    }
+  }
+
+  tabViewGauge.addEventListener('click', () => setViewMode('gauge'));
+  tabView3D.addEventListener('click', () => setViewMode('3d'));
+  tabViewSplit.addEventListener('click', () => setViewMode('split'));
+
+  // ----------------------------------------------------------------------------
+  // 3D Ceiling Fan Controls
+  // ----------------------------------------------------------------------------
+  document.querySelectorAll('[data-preset]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('[data-preset]').forEach((b) => b.classList.remove('active'));
+      e.target.classList.add('active');
+      const preset = e.target.getAttribute('data-preset');
+      fan3d.setPresetView(preset);
+    });
+  });
+
+  btnToggleBeam.addEventListener('click', () => {
+    const isVisible = fan3d.toggleBeam();
+    btnToggleBeam.classList.toggle('active', isVisible);
+  });
+
+  btnToggleStrobe.addEventListener('click', () => {
+    const isStrobe = fan3d.toggleStrobe();
+    btnToggleStrobe.classList.toggle('active', isStrobe);
+  });
+
+  btnToggleWireframe.addEventListener('click', () => {
+    const isWire = fan3d.toggleWireframe();
+    btnToggleWireframe.classList.toggle('active', isWire);
+  });
+
+  let currentBladeCount = 3;
+  btnToggleBlades.addEventListener('click', () => {
+    currentBladeCount = currentBladeCount === 3 ? 4 : (currentBladeCount === 4 ? 5 : 3);
+    fan3d.setBladeCount(currentBladeCount);
+    spectrogram.bladeCount = currentBladeCount;
+    audioSynth.bladeCount = currentBladeCount;
+    btnToggleBlades.innerText = `${currentBladeCount} BLADES`;
+  });
+
+  btnReset3dCam.addEventListener('click', () => {
+    fan3d.resetCamera();
+  });
+
+  // ----------------------------------------------------------------------------
+  // Micro-Doppler Spectrogram Controls
+  // ----------------------------------------------------------------------------
+  btnSpecWaterfall.addEventListener('click', () => {
+    btnSpecWaterfall.classList.add('active');
+    btnSpecRangeDoppler.classList.remove('active');
+    spectrogram.setViewMode('waterfall');
+  });
+
+  btnSpecRangeDoppler.addEventListener('click', () => {
+    btnSpecRangeDoppler.classList.add('active');
+    btnSpecWaterfall.classList.remove('active');
+    spectrogram.setViewMode('range_doppler');
+  });
+
+  btnCyclePalette.addEventListener('click', () => {
+    const pal = spectrogram.cyclePalette();
+    const names = { cyberpunk: 'NEON', jet: 'JET', green: 'GREEN' };
+    btnCyclePalette.innerText = `🎨 ${names[pal] || pal.toUpperCase()}`;
+  });
+
+  btnFreezeSpec.addEventListener('click', () => {
+    const isFrozen = spectrogram.togglePause();
+    btnFreezeSpec.classList.toggle('active', isFrozen);
+    btnFreezeSpec.innerText = isFrozen ? '▶ RESUME' : '❄️ FREEZE';
+  });
+
+  sliderSpecGain.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    spectrogram.setGain(val);
+  });
+
+  // ----------------------------------------------------------------------------
+  // Audio Synthesizer Toggle
+  // ----------------------------------------------------------------------------
+  btnToggleAudio.addEventListener('click', () => {
+    const enabled = audioSynth.toggle();
+    btnToggleAudio.classList.toggle('audio-active', enabled);
+    btnToggleAudio.classList.toggle('btn-outline', !enabled);
+    btnToggleAudio.classList.toggle('btn-action', enabled);
+    audioIcon.innerText = enabled ? '🔊' : '🔇';
+    appendConsoleLine(`[AUDIO] Doppler Synthesizer ${enabled ? 'ACTIVATED' : 'MUTED'}`, 'info');
+  });
 
   // Initial Boot
   loadPorts();

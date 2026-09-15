@@ -888,3 +888,257 @@ body.radar-hud {
 .console-line.info { color: #38bdf8; }
 .console-line.rpm { color: var(--accent-emerald); font-weight: 600; }
 .console-line.error { color: var(--accent-crimson); }
+
+/* ------------------------------------------------------------------------------
+ * View Switcher Tabs (GAUGE / 3D RADAR / SPLIT)
+ * ------------------------------------------------------------------------------ */
+.view-switch-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.view-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.view-tab-btn.active {
+  background: rgba(0, 240, 255, 0.2);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+}
+
+/* ------------------------------------------------------------------------------
+ * Interactive 3D Spinning Fan & Radar Beam Container
+ * ------------------------------------------------------------------------------ */
+.fan3d-wrapper {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 6px;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.04) 0%, rgba(7, 11, 18, 0.95) 85%);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  margin: 4px 0 10px 0;
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
+}
+
+.fan3d-wrapper canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  outline: none;
+}
+
+.fan3d-controls-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 10;
+  gap: 8px;
+}
+
+.fan3d-btn-group {
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+  background: rgba(9, 15, 25, 0.75);
+  backdrop-filter: blur(8px);
+  padding: 3px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fan3d-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fan3d-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fan3d-btn.active {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+.fan3d-btn.icon-only {
+  font-size: 0.8rem;
+  padding: 2px 5px;
+}
+
+/* Split View Layout */
+.panel-gauge.view-mode-split {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-gauge.view-mode-split .gauge-wrapper {
+  max-width: 320px;
+  height: auto;
+}
+
+.panel-gauge.view-mode-split .fan3d-wrapper {
+  height: 300px;
+}
+
+/* ------------------------------------------------------------------------------
+ * Micro-Doppler & Range-Doppler Heatmap Panel
+ * ------------------------------------------------------------------------------ */
+.panel-spectrogram {
+  margin-top: 18px;
+  margin-bottom: 20px;
+}
+
+.spec-mode-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.spec-tab-btn {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  letter-spacing: 0.8px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.spec-tab-btn:hover {
+  color: #fff;
+  border-color: var(--accent-cyan);
+}
+
+.spec-tab-btn.active {
+  background: rgba(0, 240, 255, 0.18);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+}
+
+.spec-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spec-btn {
+  background: rgba(17, 28, 45, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.spec-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+
+.spec-btn.active {
+  background: rgba(255, 184, 0, 0.2);
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+.gain-control-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.mini-slider {
+  width: 60px;
+  height: 4px;
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
+}
+
+.spectrogram-wrapper {
+  position: relative;
+  width: 100%;
+  height: 190px;
+  background: rgba(7, 11, 18, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#spectrogramCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ------------------------------------------------------------------------------
+ * Audio Synthesizer Toggle Glow
+ * ------------------------------------------------------------------------------ */
+#btnToggleAudio.audio-active {
+  background: rgba(0, 255, 136, 0.2);
+  border-color: var(--accent-emerald);
+  color: var(--accent-emerald);
+  box-shadow: 0 0 16px var(--accent-emerald-glow);
+  animation: audioPulse 2s infinite ease-in-out;
+}
+
+@keyframes audioPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(0, 255, 136, 0.3); }
+  50% { box-shadow: 0 0 22px rgba(0, 255, 136, 0.6); }
+}
+
