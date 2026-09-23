@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * AWR1843BOOST Radar Tachometer - 60 FPS HTML5 Canvas Radial Gauge
+ * AWR1843BOOST Radar Tachometer - Minimalist Precision Canvas Radial Gauge
  * ==============================================================================
  */
 
@@ -13,10 +13,10 @@ class TachometerGauge {
     this.maxRpm = 500.0;
     this.isRunning = false;
 
-    // Geometry angles in radians
-    this.startAngle = 0.75 * Math.PI; // 135 deg (bottom-left)
-    this.endAngle = 2.25 * Math.PI;   // 405 deg (bottom-right)
-    this.totalAngle = this.endAngle - this.startAngle; // 270 deg sweep
+    // Geometry angles in radians: 260 deg sweep
+    this.startAngle = 0.77 * Math.PI; // ~138 deg (bottom-left)
+    this.endAngle = 2.23 * Math.PI;   // ~402 deg (bottom-right)
+    this.totalAngle = this.endAngle - this.startAngle;
 
     // Animation loop
     this.animate = this.animate.bind(this);
@@ -38,7 +38,7 @@ class TachometerGauge {
     if (Math.abs(diff) < 0.05) {
       this.currentRpm = this.targetRpm;
     } else {
-      this.currentRpm += diff * 0.15;
+      this.currentRpm += diff * 0.14;
     }
 
     this.render();
@@ -50,64 +50,55 @@ class TachometerGauge {
     const w = this.canvas.width;
     const h = this.canvas.height;
     const cx = w / 2;
-    const cy = h / 2 + 10;
-    const radius = Math.min(w, h) * 0.42;
+    const cy = h / 2 + 8;
+    const radius = Math.min(w, h) * 0.40;
 
     ctx.clearRect(0, 0, w, h);
 
-    // 1. Outer Dark Halo Ring
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 18, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(11, 20, 34, 0.4)';
-    ctx.fill();
-    ctx.restore();
-
-    // 2. Background Track Arc (Unfilled portion)
+    // 1. Background Track Arc (Muted Slate / Charcoal)
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, this.startAngle, this.endAngle);
-    ctx.lineWidth = 14;
+    ctx.lineWidth = 10;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.stroke();
     ctx.restore();
 
-    // 3. Active Glowing Fill Arc
-    const pct = this.currentRpm / this.maxRpm;
+    // 2. Active Progress Arc (Precision Emerald with subtle cyan transition)
+    const pct = Math.max(0, Math.min(1.0, this.currentRpm / this.maxRpm));
     const activeEndAngle = this.startAngle + (this.totalAngle * pct);
 
     if (this.currentRpm > 0.5) {
       ctx.save();
-      const grad = ctx.createConicGradient(this.startAngle, cx, cy);
-      grad.addColorStop(0.0, '#00f0ff');
-      grad.addColorStop(0.4, '#00ff88');
-      grad.addColorStop(0.8, '#ffb800');
-      grad.addColorStop(1.0, '#ff2255');
+      const grad = ctx.createLinearGradient(
+        cx - radius, cy + radius,
+        cx + radius, cy - radius
+      );
+      grad.addColorStop(0.0, '#0ea5e9'); // Cyan
+      grad.addColorStop(0.5, '#10b981'); // Emerald
+      grad.addColorStop(1.0, '#34d399'); // Mint
 
       ctx.beginPath();
       ctx.arc(cx, cy, radius, this.startAngle, activeEndAngle);
-      ctx.lineWidth = 14;
+      ctx.lineWidth = 10;
       ctx.lineCap = 'round';
       ctx.strokeStyle = grad;
-      ctx.shadowColor = this.isRunning ? '#00ff88' : '#00f0ff';
-      ctx.shadowBlur = this.isRunning ? 16 : 8;
       ctx.stroke();
       ctx.restore();
     }
 
-    // 4. Tick Marks & Numeric Scale (0 to 500 RPM)
+    // 3. Minimalist Precision Ticks (0, 50, 100, ..., 500)
     ctx.save();
-    const numMajorTicks = 10; // 0, 50, 100, ..., 500
     const totalTicks = 50;   // Every 10 RPM
-
     for (let i = 0; i <= totalTicks; i++) {
       const tickPct = i / totalTicks;
       const angle = this.startAngle + (this.totalAngle * tickPct);
-      const isMajor = (i % 5 === 0);
+      const isMajor = (i % 10 === 0);
+      const isMedium = (i % 5 === 0);
 
-      const tickLen = isMajor ? 14 : 7;
-      const rInner = radius - 16;
+      const tickLen = isMajor ? 10 : (isMedium ? 6 : 3);
+      const rInner = radius - 14;
       const rOuter = rInner - tickLen;
 
       const x1 = cx + Math.cos(angle) * rInner;
@@ -118,27 +109,24 @@ class TachometerGauge {
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
-      ctx.lineWidth = isMajor ? 2.5 : 1.2;
+      ctx.lineWidth = isMajor ? 1.8 : 1.0;
 
-      // Color ticks based on speed zone
       if (tickPct <= pct && this.currentRpm > 1.0) {
-        if (tickPct < 0.4) ctx.strokeStyle = '#00f0ff';
-        else if (tickPct < 0.7) ctx.strokeStyle = '#00ff88';
-        else ctx.strokeStyle = '#ffb800';
+        ctx.strokeStyle = '#10b981';
       } else {
-        ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.12)';
+        ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.09)';
       }
       ctx.stroke();
 
-      // Major tick labels
+      // Major numerical labels (0, 100, 200, 300, 400, 500)
       if (isMajor) {
         const val = Math.round(tickPct * this.maxRpm);
-        const rText = rOuter - 14;
+        const rText = rOuter - 12;
         const tx = cx + Math.cos(angle) * rText;
         const ty = cy + Math.sin(angle) * rText;
 
-        ctx.font = '600 11px "JetBrains Mono", monospace';
-        ctx.fillStyle = (tickPct <= pct && this.currentRpm > 1.0) ? '#ffffff' : '#6b7280';
+        ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = (tickPct <= pct && this.currentRpm > 1.0) ? '#e2e8f0' : '#64748b';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(val.toString(), tx, ty);
@@ -146,63 +134,51 @@ class TachometerGauge {
     }
     ctx.restore();
 
-    // 5. Dial Needle
+    // 4. Sleek Minimalist Dial Needle
     const needleAngle = this.startAngle + (this.totalAngle * pct);
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(needleAngle);
 
-    // Needle body
     ctx.beginPath();
-    ctx.moveTo(-16, -2);
-    ctx.lineTo(radius - 22, -1);
+    ctx.moveTo(-10, -1.5);
+    ctx.lineTo(radius - 20, -0.75);
     ctx.lineTo(radius - 12, 0);
-    ctx.lineTo(radius - 22, 1);
-    ctx.lineTo(-16, 2);
+    ctx.lineTo(radius - 20, 0.75);
+    ctx.lineTo(-10, 1.5);
     ctx.closePath();
 
-    const needleGrad = ctx.createLinearGradient(0, 0, radius, 0);
-    needleGrad.addColorStop(0, 'rgba(0, 240, 255, 0.4)');
-    needleGrad.addColorStop(1, '#00f0ff');
-    ctx.fillStyle = needleGrad;
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 12;
+    ctx.fillStyle = this.isRunning ? '#10b981' : '#94a3b8';
     ctx.fill();
     ctx.restore();
 
-    // 6. Center Hub & Readout
+    // 5. Center Hub: Flat Minimalist Disc
     ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, radius * 0.46, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(7, 13, 22, 0.92)';
-    ctx.strokeStyle = this.isRunning ? 'rgba(0, 255, 136, 0.5)' : 'rgba(0, 240, 255, 0.25)';
-    ctx.lineWidth = 2;
-    if (this.isRunning) {
-      ctx.shadowColor = 'rgba(0, 255, 136, 0.4)';
-      ctx.shadowBlur = 16;
-    }
+    ctx.arc(cx, cy, radius * 0.44, 0, Math.PI * 2);
+    ctx.fillStyle = '#11151c';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
     ctx.fill();
     ctx.stroke();
 
-    // Digital RPM Readout
-    ctx.font = '700 48px "Chakra Petch", sans-serif';
+    // Large Digital RPM Readout
+    ctx.font = '600 48px -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = this.isRunning ? '#00ff88' : '#00f0ff';
-    ctx.shadowBlur = this.isRunning ? 14 : 6;
     ctx.fillText(this.currentRpm.toFixed(1), cx, cy - 8);
 
-    // Label: RPM & TACHOMETER
-    ctx.shadowBlur = 0;
-    ctx.font = '700 13px "JetBrains Mono", monospace';
-    ctx.fillStyle = this.isRunning ? '#00ff88' : '#00f0ff';
-    ctx.fillText('RPM', cx, cy + 28);
+    // Units label: RPM
+    ctx.font = '600 12px "JetBrains Mono", monospace';
+    ctx.fillStyle = this.isRunning ? '#10b981' : '#64748b';
+    ctx.letterSpacing = '1.5px';
+    ctx.fillText('RPM', cx, cy + 26);
 
-    ctx.font = '600 9px "JetBrains Mono", monospace';
-    ctx.fillStyle = '#64748b';
-    ctx.letterSpacing = '2px';
-    ctx.fillText('RADAR TACHOMETER', cx, cy + 42);
+    // Subtle Sub-indicator
+    ctx.font = '500 10px -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
+    ctx.fillStyle = '#475569';
+    ctx.fillText(this.isRunning ? 'RADAR ACTIVE' : 'STANDBY', cx, cy + 42);
 
     ctx.restore();
   }

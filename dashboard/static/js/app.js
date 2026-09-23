@@ -164,11 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
       lastCalibratedRpm = data.rpm;
 
       if (data.is_running && data.rpm > 10.0) {
-        fanStatusBox.className = 'fan-status-box status-running';
+        fanStatusBox.className = 'fan-state-badge status-running';
         fanStatusLabel.innerText = 'FAN RUNNING';
       } else {
-        fanStatusBox.className = 'fan-status-box status-stopped';
-        fanStatusLabel.innerText = 'STOPPED / IDLE';
+        fanStatusBox.className = 'fan-state-badge status-stopped';
+        fanStatusLabel.innerText = 'STANDBY / IDLE';
       }
 
       // 2. Update Metrics Cards
@@ -223,6 +223,28 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (data.type === 'init' || data.type === 'status') {
       updateSystemStatus(data);
     }
+    else if (data.type === 'cfg_progress') {
+      const wrap = document.getElementById('cfgProgressWrap');
+      const bar = document.getElementById('cfgProgressBar');
+      const txt = document.getElementById('cfgProgressText');
+      if (wrap && bar && txt) {
+        wrap.style.display = 'flex';
+        if (data.stage === 'uploading') {
+          bar.style.width = `${data.percent}%`;
+          bar.style.backgroundColor = data.error ? '#ef4444' : '#10b981';
+          txt.innerText = `Uploading configuration: ${data.current}/${data.total} (${data.percent}%)`;
+        } else if (data.stage === 'complete') {
+          bar.style.width = '100%';
+          bar.style.backgroundColor = '#10b981';
+          txt.innerText = 'Configuration applied. Radar is chirping!';
+          setTimeout(() => { wrap.style.display = 'none'; }, 4000);
+        } else if (data.stage === 'error') {
+          bar.style.backgroundColor = '#ef4444';
+          txt.innerText = `Error: ${data.message}`;
+        }
+      }
+      appendConsoleLine(`[CONFIG] ${data.message || ''}`, data.error ? 'error' : 'info');
+    }
     else if (data.type === 'log') {
       appendConsoleLine(`[${data.timestamp || ''}] ${data.message}`, 'info');
     }
@@ -232,37 +254,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.connected !== undefined) {
       isConnected = data.connected;
       if (isConnected) {
-        connBadge.className = 'status-badge';
-        connBadge.querySelector('.badge-dot').className = 'badge-dot dot-connected';
+        connBadge.className = 'status-pill';
+        const dot = connBadge.querySelector('.status-dot') || connBadge.querySelector('.badge-dot');
+        if (dot) dot.className = 'status-dot dot-connected';
         connText.innerText = `CONNECTED (${data.port || 'UART'})`;
         btnConnect.innerText = 'DISCONNECT';
-        btnConnect.className = 'hud-btn btn-danger';
+        btnConnect.className = 'dash-btn btn-secondary';
       } else {
-        connBadge.className = 'status-badge';
-        connBadge.querySelector('.badge-dot').className = 'badge-dot dot-offline';
+        connBadge.className = 'status-pill';
+        const dot = connBadge.querySelector('.status-dot') || connBadge.querySelector('.badge-dot');
+        if (dot) dot.className = 'status-dot dot-offline';
         connText.innerText = 'DISCONNECTED';
         btnConnect.innerText = 'CONNECT';
-        btnConnect.className = 'hud-btn btn-primary';
+        btnConnect.className = 'dash-btn btn-primary';
       }
     }
 
     if (data.sensor_active !== undefined) {
       isSensorActive = data.sensor_active;
       if (isSensorActive) {
-        sensorBadge.className = 'status-badge';
-        sensorBadge.querySelector('.badge-dot').className = 'badge-dot dot-active';
+        sensorBadge.className = 'status-pill';
+        const dot = sensorBadge.querySelector('.status-dot') || sensorBadge.querySelector('.badge-dot');
+        if (dot) dot.className = 'status-dot dot-active';
         sensorText.innerText = 'RADAR ACTIVE';
+        if (btnStartSensor) {
+          btnStartSensor.disabled = true;
+          btnStartSensor.style.opacity = '0.5';
+        }
       } else {
-        sensorBadge.className = 'status-badge';
-        sensorBadge.querySelector('.badge-dot').className = 'badge-dot dot-idle';
-        sensorText.innerText = 'SENSOR IDLE';
+        sensorBadge.className = 'status-pill';
+        const dot = sensorBadge.querySelector('.status-dot') || sensorBadge.querySelector('.badge-dot');
+        if (dot) dot.className = 'status-dot dot-idle';
+        sensorText.innerText = 'RADAR IDLE';
+        if (btnStartSensor) {
+          btnStartSensor.disabled = false;
+          btnStartSensor.style.opacity = '1.0';
+        }
       }
     }
 
     if (data.simulation !== undefined) {
       isSimMode = data.simulation;
       simBadge.style.display = isSimMode ? 'flex' : 'none';
-      btnToggleSim.className = isSimMode ? 'hud-btn btn-secondary' : 'hud-btn btn-outline';
+      btnToggleSim.className = isSimMode ? 'nav-btn active' : 'nav-btn';
     }
 
     if (data.radius !== undefined) {
@@ -296,21 +330,25 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await resp.json();
       selectPort.innerHTML = '';
 
-      if (data.ports.length === 0) {
-        selectPort.innerHTML = '<option value="">No serial ports found</option>';
+      if (!data.ports || data.ports.length === 0) {
+        selectPort.innerHTML = '<option value="">No serial ports found (plug in radar)</option>';
         return;
       }
 
+      let selectedAssigned = false;
       data.ports.forEach((p) => {
         const opt = document.createElement('option');
         opt.value = p.port;
         opt.innerText = p.desc;
-        if (p.recommended) {
+        if (p.recommended && !selectedAssigned) {
           opt.selected = true;
-          opt.innerText = `⭐ ${p.desc}`;
+          selectedAssigned = true;
         }
         selectPort.appendChild(opt);
       });
+      if (!selectedAssigned && selectPort.options.length > 0) {
+        selectPort.options[0].selected = true;
+      }
     } catch (err) {
       selectPort.innerHTML = '<option value="">Error scanning ports</option>';
     }
@@ -352,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Connect
       const port = selectPort.value;
       const baud = parseInt(selectBaud.value, 10);
+      const profile = selectProfile.value;
       if (!port) {
         alert('Please select a serial port from the dropdown.');
         return;
@@ -361,14 +400,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const resp = await fetch('/api/connect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ port, baud })
+          body: JSON.stringify({ port, baud, profile })
         });
         const result = await resp.json();
         if (result.success) {
-          appendConsoleLine(`[SUCCESS] Connected to ${port}!`, 'system');
+          appendConsoleLine(`[SUCCESS] Connected to ${port}! Click START RADAR to begin streaming.`, 'system');
         } else {
           appendConsoleLine(`[ERROR] Connection failed: ${result.error}`, 'error');
-          alert(`Connection failed: ${result.error}\n\nTip: On Linux, ensure user is in 'uucp' group:\nsudo usermod -a -G uucp $USER`);
+          alert(`Connection failed: ${result.error}`);
         }
       } catch (err) {
         appendConsoleLine(`[ERROR] Connect request failed: ${err}`, 'error');
@@ -379,6 +418,14 @@ document.addEventListener('DOMContentLoaded', () => {
   btnStartSensor.addEventListener('click', async () => {
     const profile = selectProfile.value;
     appendConsoleLine(`[SYSTEM] Initializing radar sensor with profile: ${profile}...`, 'system');
+    const wrap = document.getElementById('cfgProgressWrap');
+    const bar = document.getElementById('cfgProgressBar');
+    const txt = document.getElementById('cfgProgressText');
+    if (wrap && bar && txt) {
+      wrap.style.display = 'flex';
+      bar.style.width = '10%';
+      txt.innerText = `Starting upload of ${profile}...`;
+    }
     try {
       const resp = await fetch('/api/start', {
         method: 'POST',
@@ -389,9 +436,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!result.success) {
         appendConsoleLine(`[ERROR] Failed to start sensor: ${result.error}`, 'error');
         alert(result.error);
+        if (wrap) wrap.style.display = 'none';
       }
     } catch (err) {
       appendConsoleLine(`[ERROR] Start request failed: ${err}`, 'error');
+      if (wrap) wrap.style.display = 'none';
     }
   });
 

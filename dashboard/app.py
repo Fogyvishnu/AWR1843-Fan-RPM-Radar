@@ -54,27 +54,63 @@ state = {
 state_lock = threading.Lock()
 sse_subscribers = []
 sse_lock = threading.Lock()
+serial_io_lock = threading.Lock()
+is_uploading_cfg = threading.Event()
 serial_conn = None
 serial_thread = None
 sim_thread = None
 shutdown_flag = threading.Event()
 
 def get_available_ports():
-    """Scans and prioritizes USB / XDS110 serial ports."""
+    """Scans and accurately ranks USB / TI XDS110 serial ports."""
     ports_list = []
     if HAS_SERIAL:
         try:
             for p in serial.tools.list_ports.comports():
                 dev = p.device
                 desc = p.description or "Serial Device"
+                hwid = p.hwid or ""
                 # Exclude legacy motherboard ttyS ports on Linux
                 if dev.startswith("/dev/ttyS") and dev[9:].isdigit() and int(dev[9:]) > 3:
                     continue
-                is_recommended = ("ACM" in dev or "USB" in dev or "XDS110" in desc)
+
+                desc_lower = (desc + " " + hwid).lower()
+                is_xds = ("xds110" in desc_lower or "ti" in desc_lower)
+                is_app_uart = ("application" in desc_lower or "user" in desc_lower or "cli" in desc_lower)
+                is_data_port = ("auxiliary" in desc_lower or "data" in desc_lower)
+
+                if is_xds and is_app_uart:
+                    label = f"{dev} — TI XDS110 Application/User UART [RECOMMENDED]"
+                    rank = 1
+                    is_cli = True
+                elif is_xds and is_data_port:
+                    label = f"{dev} — TI XDS110 Auxiliary Data Port (Data only)"
+                    rank = 3
+                    is_cli = False
+                elif "acm0" in dev.lower() or "usb0" in dev.lower():
+                    label = f"{dev} — USB Radar Serial [RECOMMENDED]"
+                    rank = 1
+                    is_cli = True
+                elif "acm1" in dev.lower() or "usb1" in dev.lower():
+                    label = f"{dev} — USB Auxiliary Data Port"
+                    rank = 3
+                    is_cli = False
+                elif "usb" in desc_lower or "xds" in desc_lower or "acm" in dev.lower():
+                    label = f"{dev} — {desc}"
+                    rank = 2
+                    is_cli = True
+                else:
+                    label = f"{dev} — {desc}"
+                    rank = 4
+                    is_cli = False
+
                 ports_list.append({
                     "port": dev,
-                    "desc": f"{desc} ({dev})",
-                    "recommended": is_recommended
+                    "desc": label,
+                    "raw_desc": desc,
+                    "rank": rank,
+                    "is_cli": is_cli,
+                    "recommended": (rank == 1)
                 })
         except Exception:
             pass
@@ -83,14 +119,18 @@ def get_available_ports():
     if sys.platform.startswith("linux"):
         for path in sorted(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")):
             if not any(p["port"] == path for p in ports_list):
+                rank = 1 if ("ACM0" in path or "USB0" in path) else 2
                 ports_list.insert(0, {
                     "port": path,
-                    "desc": f"USB Radar Device ({path})",
-                    "recommended": True
+                    "desc": f"{path} — USB Radar Device",
+                    "raw_desc": path,
+                    "rank": rank,
+                    "is_cli": True,
+                    "recommended": (rank == 1)
                 })
 
-    # Sort recommended ports to top
-    ports_list.sort(key=lambda x: not x["recommended"])
+    # Sort so rank 1 (Application/User UART) is ALWAYS first!
+    ports_list.sort(key=lambda x: (x["rank"], x["port"]))
     return ports_list
 
 def get_available_profiles():
@@ -239,12 +279,19 @@ def serial_reader_loop():
     """Background worker continuously receiving data from AWR1843BOOST UART."""
     global serial_conn
     while not shutdown_flag.is_set():
+        if is_uploading_cfg.is_set():
+            time.sleep(0.05)
+            continue
+
         if serial_conn is not None and serial_conn.is_open:
             try:
-                raw_bytes = serial_conn.readline()
-                if not raw_bytes:
-                    continue
-                line = raw_bytes.decode("utf-8", errors="ignore").strip()
+                line = None
+                with serial_io_lock:
+                    if serial_conn is not None and serial_conn.is_open and not is_uploading_cfg.is_set():
+                        raw_bytes = serial_conn.readline()
+                        if raw_bytes:
+                            line = raw_bytes.decode("utf-8", errors="ignore").strip()
+
                 if not line:
                     continue
 
@@ -265,15 +312,16 @@ def serial_reader_loop():
                         "timestamp": time.strftime("%H:%M:%S")
                     })
             except Exception as e:
-                with state_lock:
-                    state["is_connected"] = False
-                    state["is_sensor_active"] = False
-                broadcast_telemetry({
-                    "type": "status",
-                    "connected": False,
-                    "error": f"Serial communication lost: {e}"
-                })
-                break
+                if not shutdown_flag.is_set() and not is_uploading_cfg.is_set():
+                    with state_lock:
+                        state["is_connected"] = False
+                        state["is_sensor_active"] = False
+                    broadcast_telemetry({
+                        "type": "status",
+                        "connected": False,
+                        "error": f"Serial communication lost: {e}"
+                    })
+                    break
         else:
             time.sleep(0.05)
 
@@ -331,6 +379,131 @@ def simulation_worker_loop():
             time.sleep(0.1)  # 10 Hz telemetry rate
         else:
             time.sleep(0.2)
+
+def find_profile_path(profile_name):
+    """Finds full path to the requested radar configuration profile."""
+    candidates = [
+        REPO_ROOT / "out_of_box_1843_mss" / profile_name,
+        REPO_ROOT / "prebuilt_binaries" / profile_name,
+        REPO_ROOT / profile_name
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+def send_radar_config(cfg_path):
+    """
+    Safely sends .cfg profile commands to the AWR1843 radar CLI port.
+    Ensures safe line endings (\\n), checks response, and reports progress over SSE.
+    """
+    global serial_conn
+    with state_lock:
+        if serial_conn is None or not serial_conn.is_open:
+            broadcast_telemetry({"type": "cfg_progress", "stage": "error", "message": "Radar is not connected."})
+            return False, "Radar is not connected."
+
+    is_uploading_cfg.set()
+    try:
+        with serial_io_lock:
+            # 1. Stop any currently active chirping and clear buffers
+            try:
+                serial_conn.write(b"sensorStop\n")
+                time.sleep(0.08)
+                serial_conn.reset_input_buffer()
+                serial_conn.reset_output_buffer()
+            except Exception:
+                pass
+
+            broadcast_telemetry({
+                "type": "log",
+                "message": f"[*] Uploading radar profile: {cfg_path.name}..."
+            })
+            broadcast_telemetry({
+                "type": "cfg_progress",
+                "stage": "starting",
+                "message": f"Preparing {cfg_path.name}..."
+            })
+
+            with open(cfg_path, "r") as f:
+                commands = [line.strip() for line in f if line.strip() and not line.strip().startswith("%")]
+
+            total = len(commands)
+            error_count = 0
+
+            for idx, cmd in enumerate(commands, 1):
+                # Send command with single \n terminator
+                serial_conn.write((cmd + "\n").encode("utf-8"))
+
+                # mmWave CLI required parsing delay
+                cmd_delay = 0.08 if ("sensorStart" in cmd or "sensorStop" in cmd) else 0.035
+                time.sleep(cmd_delay)
+
+                # Read CLI response
+                resp = ""
+                try:
+                    if serial_conn.in_waiting > 0:
+                        resp = serial_conn.read(serial_conn.in_waiting).decode("utf-8", errors="ignore").strip()
+                except Exception:
+                    pass
+
+                has_err = ("Error" in resp)
+                if has_err:
+                    error_count += 1
+                    broadcast_telemetry({
+                        "type": "log",
+                        "message": f"[!] Error on '{cmd}': {resp}"
+                    })
+
+                broadcast_telemetry({
+                    "type": "cfg_progress",
+                    "stage": "uploading",
+                    "current": idx,
+                    "total": total,
+                    "percent": int((idx / total) * 100),
+                    "command": cmd,
+                    "error": has_err,
+                    "message": f"[{idx}/{total}] {cmd}"
+                })
+
+            with state_lock:
+                state["is_sensor_active"] = True
+
+            msg = f"Radar initialized with {cfg_path.name}. Chirping active!"
+            broadcast_telemetry({
+                "type": "cfg_progress",
+                "stage": "complete",
+                "total": total,
+                "current": total,
+                "percent": 100,
+                "message": msg
+            })
+            broadcast_telemetry({
+                "type": "status",
+                "connected": True,
+                "sensor_active": True,
+                "message": msg
+            })
+            broadcast_telemetry({
+                "type": "log",
+                "message": f"[SUCCESS] {msg}"
+            })
+            return True, msg
+
+    except Exception as e:
+        err_msg = f"Config upload failed: {e}"
+        broadcast_telemetry({
+            "type": "cfg_progress",
+            "stage": "error",
+            "message": err_msg
+        })
+        broadcast_telemetry({
+            "type": "log",
+            "message": f"[ERROR] {err_msg}"
+        })
+        return False, err_msg
+    finally:
+        is_uploading_cfg.clear()
 
 class RadarDashboardHandler(SimpleHTTPRequestHandler):
     """Custom REST API & SSE HTTP handler."""
@@ -449,6 +622,8 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
         global serial_conn, serial_thread
         port = body.get("port")
         baud = int(body.get("baud", 115200))
+        auto_start = body.get("auto_start", False)
+        profile_name = body.get("profile", state.get("selected_profile", "profile_fan_rpm_highspeed.cfg"))
 
         if not port:
             self.send_json_response({"success": False, "error": "No serial port specified"}, status=400)
@@ -460,10 +635,20 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
 
         try:
             if serial_conn is not None and serial_conn.is_open:
-                serial_conn.close()
+                try:
+                    serial_conn.close()
+                except Exception:
+                    pass
 
-            serial_conn = serial.Serial(port, baud, timeout=0.1)
-            time.sleep(0.2)
+            serial_conn = serial.Serial(
+                port=port,
+                baudrate=baud,
+                timeout=0.1,
+                write_timeout=1.0,
+                dsrdtr=False,
+                rtscts=False
+            )
+            time.sleep(0.15)
             serial_conn.reset_input_buffer()
             serial_conn.reset_output_buffer()
 
@@ -472,6 +657,7 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
                 state["baud"] = baud
                 state["is_connected"] = True
                 state["simulation_mode"] = False
+                state["selected_profile"] = profile_name
 
             # Start reader thread if needed
             if serial_thread is None or not serial_thread.is_alive():
@@ -485,6 +671,12 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
                 "sensor_active": False,
                 "message": f"Connected to {port} @ {baud} baud"
             })
+
+            if auto_start:
+                cfg_path = find_profile_path(profile_name)
+                if cfg_path:
+                    threading.Thread(target=send_radar_config, args=(cfg_path,), daemon=True).start()
+
             self.send_json_response({"success": True, "port": port})
         except Exception as e:
             self.send_json_response({"success": False, "error": str(e)}, status=500)
@@ -493,13 +685,13 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
         global serial_conn
         try:
             if serial_conn is not None and serial_conn.is_open:
-                # Try sending stop command before closing
-                try:
-                    serial_conn.write(b"sensorStop\r\n")
-                    time.sleep(0.05)
-                except Exception:
-                    pass
-                serial_conn.close()
+                with serial_io_lock:
+                    try:
+                        serial_conn.write(b"sensorStop\n")
+                        time.sleep(0.05)
+                    except Exception:
+                        pass
+                    serial_conn.close()
             serial_conn = None
 
             with state_lock:
@@ -518,20 +710,9 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
 
     def handle_start_sensor(self, body):
         global serial_conn
-        profile_name = body.get("profile", "profile_fan_rpm_highspeed.cfg")
-        
-        # Locate profile file
-        cfg_path = None
-        candidates = [
-            REPO_ROOT / "out_of_box_1843_mss" / profile_name,
-            REPO_ROOT / "prebuilt_binaries" / profile_name,
-            REPO_ROOT / profile_name
-        ]
-        for c in candidates:
-            if c.exists():
-                cfg_path = c
-                break
+        profile_name = body.get("profile", state.get("selected_profile", "profile_fan_rpm_highspeed.cfg"))
 
+        cfg_path = find_profile_path(profile_name)
         if not cfg_path:
             self.send_json_response({"success": False, "error": f"Profile file '{profile_name}' not found"}, status=404)
             return
@@ -540,7 +721,6 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
             state["selected_profile"] = profile_name
 
         if serial_conn is None or not serial_conn.is_open:
-            # If in simulation mode, start simulated sensor
             with state_lock:
                 if state["simulation_mode"]:
                     state["is_sensor_active"] = True
@@ -549,31 +729,8 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
             self.send_json_response({"success": False, "error": "Radar is not connected. Connect port first."}, status=400)
             return
 
-        def uploader_worker():
-            try:
-                broadcast_telemetry({"type": "log", "message": f"[*] Uploading radar profile: {cfg_path.name}..."})
-                with open(cfg_path, "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line or line.startswith("%"):
-                            continue
-                        serial_conn.write((line + "\r\n").encode("utf-8"))
-                        time.sleep(0.04)  # mmWave CLI required parsing delay
-
-                with state_lock:
-                    state["is_sensor_active"] = True
-
-                broadcast_telemetry({
-                    "type": "status",
-                    "connected": True,
-                    "sensor_active": True,
-                    "message": f"Radar initialized with {cfg_path.name}. Chirping active!"
-                })
-            except Exception as e:
-                broadcast_telemetry({"type": "log", "message": f"[ERROR] Config upload failed: {e}"})
-
-        threading.Thread(target=uploader_worker, daemon=True).start()
-        self.send_json_response({"success": True, "message": "Uploading configuration..."})
+        threading.Thread(target=send_radar_config, args=(cfg_path,), daemon=True).start()
+        self.send_json_response({"success": True, "message": f"Uploading {profile_name}..."})
 
     def handle_stop_sensor(self):
         global serial_conn
@@ -582,11 +739,12 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
             state["sim_speed_target"] = 0.0
 
         if serial_conn is not None and serial_conn.is_open:
-            try:
-                serial_conn.write(b"sensorStop\r\n")
-                time.sleep(0.05)
-            except Exception:
-                pass
+            with serial_io_lock:
+                try:
+                    serial_conn.write(b"sensorStop\n")
+                    time.sleep(0.06)
+                except Exception:
+                    pass
 
         broadcast_telemetry({
             "type": "status",
