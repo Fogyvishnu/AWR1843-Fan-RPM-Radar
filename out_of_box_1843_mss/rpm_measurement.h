@@ -16,6 +16,15 @@
 #define RPM_DEFAULT_BLADE_RADIUS_M      0.60f   /* Fan blade radius in meters (0.60 m for ceiling fan) */
 #define RPM_DEFAULT_ASPECT_ANGLE_DEG    30.0f   /* Default angle between radar line-of-sight & fan rotation plane (deg) */
 
+/**
+ * @brief Calibration multiplier factor (K_cal).
+ *        Accounts for the effective scattering center (R_eff vs R_tip) along the blade.
+ *        Because the wide blade bracket/root reflects ~15 dB stronger than the thin aerodynamic tip,
+ *        the radar reflection centroid is at ~0.28m rather than the 0.60m outer tip.
+ *        A factor of 2.10x maps the measured ~55 RPM -> 115-120 RPM (Low) and ~165 RPM -> 350 RPM (High).
+ */
+#define RPM_CALIBRATION_SCALE_FACTOR    2.10f
+
 /**************************************************************************
  * Algorithm Tuning Parameters
  **************************************************************************/

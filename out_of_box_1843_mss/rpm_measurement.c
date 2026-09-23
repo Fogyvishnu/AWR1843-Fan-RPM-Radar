@@ -346,7 +346,7 @@ void RPM_calculateFromDetMatrix(
     effectiveRadius = RPM_DEFAULT_BLADE_RADIUS_M * cosAngle;
     if (effectiveRadius > 0.001f)
     {
-        rpmInstantaneous = (60.0f * tipVelocity) / (2.0f * PI_FLOAT * effectiveRadius);
+        rpmInstantaneous = ((60.0f * tipVelocity) / (2.0f * PI_FLOAT * effectiveRadius)) * RPM_CALIBRATION_SCALE_FACTOR;
     }
     else
     {

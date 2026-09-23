@@ -46,6 +46,7 @@ state = {
     "sim_current_speed": 0.0,
     "blade_radius_m": 0.60,
     "aspect_angle_deg": 30.0,
+    "cal_scale": 2.10,
     "selected_profile": "profile_fan_rpm_highspeed.cfg",
     "raw_logs": []
 }
@@ -144,6 +145,7 @@ def parse_radar_line(raw_line):
     with state_lock:
         blade_r = state["blade_radius_m"]
         angle_deg = state["aspect_angle_deg"]
+        cal_scale = state.get("cal_scale", 2.10)
 
     cos_theta = math.cos(math.radians(angle_deg))
     if cos_theta < 0.1:
@@ -187,12 +189,12 @@ def parse_radar_line(raw_line):
             except ValueError:
                 tip_vel = 0.0
 
-        # Calibrated RPM calculation based on live user-adjusted radius and angle:
-        # RPM = (60 * tip_vel) / (2 * pi * R * cos(theta))
+        # Calibrated RPM calculation based on live user-adjusted radius, angle, and calibration scale:
+        # RPM = ((60 * tip_vel) / (2 * pi * R * cos(theta))) * cal_scale
         if tip_vel > 0.1 and is_running and blade_r > 0.05:
-            calibrated_rpm = (60.0 * tip_vel) / (2.0 * math.pi * blade_r * cos_theta)
+            calibrated_rpm = ((60.0 * tip_vel) / (2.0 * math.pi * blade_r * cos_theta)) * cal_scale
         else:
-            calibrated_rpm = raw_rpm if is_running else 0.0
+            calibrated_rpm = (raw_rpm * cal_scale) if is_running else 0.0
 
         return {
             "type": "telemetry",
@@ -205,6 +207,7 @@ def parse_radar_line(raw_line):
             "tip_vel": round(tip_vel, 1),
             "radius": blade_r,
             "angle": angle_deg,
+            "cal_scale": cal_scale,
             "timestamp": now_str,
             "ts_ms": timestamp_ms
         }
@@ -215,17 +218,19 @@ def parse_radar_line(raw_line):
         except ValueError:
             raw_rpm = 0.0
         is_running = raw_rpm > 10.0
+        calibrated_rpm = (raw_rpm * cal_scale) if is_running else 0.0
         return {
             "type": "telemetry",
-            "rpm": round(raw_rpm, 1),
+            "rpm": round(calibrated_rpm, 1),
             "raw_rpm": round(raw_rpm, 1),
             "status": "RUNNING" if is_running else "STOPPED",
             "is_running": is_running,
             "dist": 1.85 if is_running else 0.0,
             "snr": 7.5 if is_running else 0.0,
-            "tip_vel": round((2.0 * math.pi * blade_r * cos_theta * raw_rpm) / 60.0, 1) if is_running else 0.0,
+            "tip_vel": round((2.0 * math.pi * blade_r * cos_theta * calibrated_rpm) / 60.0, 1) if is_running else 0.0,
             "radius": blade_r,
             "angle": angle_deg,
+            "cal_scale": cal_scale,
             "timestamp": now_str,
             "ts_ms": timestamp_ms
         }
@@ -317,6 +322,7 @@ def simulation_worker_loop():
                 "tip_vel": round(display_tip_vel, 1),
                 "radius": blade_r,
                 "angle": angle_deg,
+                "cal_scale": state.get("cal_scale", 2.10),
                 "timestamp": time.strftime("%H:%M:%S"),
                 "ts_ms": int(time.time() * 1000),
                 "simulation": True
@@ -356,6 +362,7 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
                     "sim_target": state["sim_speed_target"],
                     "radius": state["blade_radius_m"],
                     "angle": state["aspect_angle_deg"],
+                    "cal_scale": state.get("cal_scale", 2.10),
                     "selected_profile": state["selected_profile"]
                 })
             return
@@ -415,7 +422,8 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
                 "sensor_active": state["is_sensor_active"],
                 "simulation": state["simulation_mode"],
                 "radius": state["blade_radius_m"],
-                "angle": state["aspect_angle_deg"]
+                "angle": state["aspect_angle_deg"],
+                "cal_scale": state.get("cal_scale", 2.10)
             }
         self.wfile.write(f"data: {json.dumps(init_packet)}\n\n".encode("utf-8"))
         self.wfile.flush()
@@ -594,16 +602,20 @@ class RadarDashboardHandler(SimpleHTTPRequestHandler):
                 state["blade_radius_m"] = float(body["radius"])
             if "angle" in body:
                 state["aspect_angle_deg"] = float(body["angle"])
+            if "cal_scale" in body:
+                state["cal_scale"] = float(body["cal_scale"])
 
         broadcast_telemetry({
             "type": "calibrated",
             "radius": state["blade_radius_m"],
-            "angle": state["aspect_angle_deg"]
+            "angle": state["aspect_angle_deg"],
+            "cal_scale": state["cal_scale"]
         })
         self.send_json_response({
             "success": True,
             "radius": state["blade_radius_m"],
-            "angle": state["aspect_angle_deg"]
+            "angle": state["aspect_angle_deg"],
+            "cal_scale": state["cal_scale"]
         })
 
     def handle_sim_toggle(self, body):

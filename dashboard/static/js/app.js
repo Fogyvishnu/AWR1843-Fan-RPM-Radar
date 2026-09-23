@@ -74,6 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnStartSensor = document.getElementById('btnStartSensor');
   const btnStopSensor = document.getElementById('btnStopSensor');
 
+  const sliderCalScale = document.getElementById('sliderCalScale');
+  const displayCalScale = document.getElementById('displayCalScale');
+  const btnAutoCal = document.getElementById('btnAutoCal');
+  const calPresetBtns = document.querySelectorAll('.cal-preset-btn');
+
   const sliderRadius = document.getElementById('sliderRadius');
   const displayRadius = document.getElementById('displayRadius');
   const sliderAngle = document.getElementById('sliderAngle');
@@ -98,6 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let isSimMode = false;
   let isRecording = false;
   let recordedSessions = [];
+  let lastRawRpm = 0.0;
+  let lastCalibratedRpm = 0.0;
 
   let packetCounter = 0;
   let lastFpsTime = Date.now();
@@ -153,6 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
       spectrogram.setTelemetry(data);
       audioSynth.setRpm(data.rpm, data.is_running);
 
+      if (data.raw_rpm !== undefined) lastRawRpm = data.raw_rpm;
+      lastCalibratedRpm = data.rpm;
+
       if (data.is_running && data.rpm > 10.0) {
         fanStatusBox.className = 'fan-status-box status-running';
         fanStatusLabel.innerText = 'FAN RUNNING';
@@ -195,12 +205,14 @@ document.addEventListener('DOMContentLoaded', () => {
         recordedSessions.push({
           timestamp: data.timestamp,
           rpm: data.rpm,
+          raw_rpm: data.raw_rpm !== undefined ? data.raw_rpm : data.rpm,
           status: data.status,
           distance_m: data.dist,
           snr_db: data.snr,
           tip_vel_m_s: data.tip_vel,
           radius_m: data.radius,
-          angle_deg: data.angle
+          angle_deg: data.angle,
+          cal_scale: data.cal_scale || 2.10
         });
         logSampleCount.innerText = recordedSessions.length.toString();
       }
@@ -265,6 +277,12 @@ document.addEventListener('DOMContentLoaded', () => {
       displayAngle.innerText = `${Math.round(data.angle)} °`;
       fan3d.setAspectAngle(data.angle);
       spectrogram.setTelemetry({ angle: data.angle });
+    }
+
+    if (data.cal_scale !== undefined && sliderCalScale) {
+      sliderCalScale.value = data.cal_scale;
+      displayCalScale.innerText = `${data.cal_scale.toFixed(2)}x`;
+      updatePresetButtons(data.cal_scale);
     }
   }
 
@@ -387,24 +405,98 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ----------------------------------------------------------------------------
-  // Live Calibration Sliders
+  // Live Calibration Sliders & Controls
   // ----------------------------------------------------------------------------
+  function updatePresetButtons(val) {
+    if (!calPresetBtns) return;
+    calPresetBtns.forEach((btn) => {
+      const scale = parseFloat(btn.getAttribute('data-scale'));
+      if (!isNaN(scale)) {
+        if (Math.abs(scale - val) < 0.04) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      }
+    });
+  }
+
   let calibDebounce = null;
   function sendCalibration() {
     clearTimeout(calibDebounce);
     calibDebounce = setTimeout(async () => {
       const radius = parseFloat(sliderRadius.value);
       const angle = parseFloat(sliderAngle.value);
+      const calScale = sliderCalScale ? parseFloat(sliderCalScale.value) : 2.10;
       try {
         await fetch('/api/calibrate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ radius, angle })
+          body: JSON.stringify({ radius, angle, cal_scale: calScale })
         });
       } catch (err) {
         console.warn('Failed to sync calibration to server');
       }
     }, 150);
+  }
+
+  if (sliderCalScale) {
+    sliderCalScale.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      displayCalScale.innerText = `${val.toFixed(2)}x`;
+      updatePresetButtons(val);
+      sendCalibration();
+    });
+  }
+
+  if (calPresetBtns) {
+    calPresetBtns.forEach((btn) => {
+      if (btn.hasAttribute('data-scale')) {
+        btn.addEventListener('click', (e) => {
+          const scale = parseFloat(btn.getAttribute('data-scale'));
+          sliderCalScale.value = scale;
+          displayCalScale.innerText = `${scale.toFixed(2)}x`;
+          updatePresetButtons(scale);
+          sendCalibration();
+          appendConsoleLine(`[CALIBRATION] Preset applied: ${scale.toFixed(2)}x scale multiplier`, 'info');
+        });
+      }
+    });
+  }
+
+  if (btnAutoCal) {
+    btnAutoCal.addEventListener('click', () => {
+      const defaultVal = lastCalibratedRpm > 0 ? Math.round(lastCalibratedRpm).toString() : '350';
+      const promptVal = prompt(
+        'Auto-Calibrate RPM Multiplier:\nEnter your ceiling fan\'s actual known RPM for the current speed setting\n(e.g., 120 for Low speed, or 350 for High speed):',
+        defaultVal
+      );
+      if (!promptVal) return;
+      const targetRpm = parseFloat(promptVal);
+      if (isNaN(targetRpm) || targetRpm <= 0) {
+        alert('Invalid RPM value entered.');
+        return;
+      }
+
+      // Determine raw unscaled RPM
+      const currentScale = (sliderCalScale ? parseFloat(sliderCalScale.value) : 2.10) || 2.10;
+      const currentRaw = lastRawRpm > 1.0 ? lastRawRpm : (lastCalibratedRpm / currentScale);
+
+      if (currentRaw <= 5.0) {
+        alert('Fan must be actively spinning with radar detecting signal to auto-calibrate. Please start the fan and try again.');
+        return;
+      }
+
+      const calculatedFactor = Math.min(4.0, Math.max(0.5, targetRpm / currentRaw));
+      sliderCalScale.value = calculatedFactor.toFixed(2);
+      displayCalScale.innerText = `${calculatedFactor.toFixed(2)}x`;
+      updatePresetButtons(calculatedFactor);
+      sendCalibration();
+      appendConsoleLine(
+        `[CALIBRATION] Auto-calibrated! Target: ${targetRpm} RPM, Raw: ${currentRaw.toFixed(1)} RPM -> New Multiplier: ${calculatedFactor.toFixed(2)}x`,
+        'system'
+      );
+    });
   }
 
   sliderRadius.addEventListener('input', (e) => {
@@ -461,10 +553,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const headers = ['Timestamp', 'RPM', 'Status', 'Distance_m', 'SNR_dB', 'TipVelocity_m_s', 'BladeRadius_m', 'AspectAngle_deg'];
+    const headers = ['Timestamp', 'Calibrated_RPM', 'Raw_RPM', 'Scale_Multiplier', 'Status', 'Distance_m', 'SNR_dB', 'TipVelocity_m_s', 'BladeRadius_m', 'AspectAngle_deg'];
     const rows = recordedSessions.map((s) => [
       s.timestamp,
       s.rpm,
+      s.raw_rpm !== undefined ? s.raw_rpm : s.rpm,
+      s.cal_scale || 2.10,
       s.status,
       s.distance_m,
       s.snr_db,

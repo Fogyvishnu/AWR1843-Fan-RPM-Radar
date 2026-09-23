@@ -760,6 +760,40 @@ body.radar-hud {
   cursor: pointer;
 }
 
+.preset-btn-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.cal-preset-btn {
+  flex: 1;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.cal-preset-btn:hover {
+  background: rgba(0, 240, 255, 0.2);
+  color: #fff;
+  border-color: var(--accent-cyan);
+}
+
+.cal-preset-btn.active {
+  background: rgba(0, 240, 255, 0.25);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
 .sample-counter-row {
   display: flex;
   justify-content: space-between;

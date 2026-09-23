@@ -272,13 +272,25 @@
           </div>
         </section>
 
-        <!-- Card 3: Live Calibration (Radius & Aspect Angle) -->
+        <!-- Card 3: Live Calibration (Multiplier, Radius & Aspect Angle) -->
         <section class="hud-panel panel-sub">
           <div class="panel-header">
             <h3 class="panel-title-sm">📐 LIVE CALIBRATION</h3>
             <span class="panel-tag-live">ON-THE-FLY</span>
           </div>
           <div class="control-form">
+            <div class="form-group">
+              <div class="slider-label-row">
+                <label for="sliderCalScale" title="Effective scattering center ratio (R_blade / R_eff). Standard ceiling fan blade root reflects stronger than tip, requiring ~2.10x">RPM Scale Multiplier:</label>
+                <span class="slider-val-display" id="displayCalScale">2.10x</span>
+              </div>
+              <input type="range" id="sliderCalScale" min="0.50" max="4.00" step="0.05" value="2.10" class="hud-slider">
+              <div class="preset-btn-row">
+                <button type="button" class="cal-preset-btn active" data-scale="2.10" title="Ceiling fan blade root reflection centroid (Default)">2.10x (Fan)</button>
+                <button type="button" class="cal-preset-btn" data-scale="1.00" title="1.00x Raw Doppler unscaled speed">1.00x (Raw)</button>
+                <button type="button" class="cal-preset-btn" id="btnAutoCal" title="Auto-calibrate from known fan RPM">⚡ Auto-Cal</button>
+              </div>
+            </div>
             <div class="form-group">
               <div class="slider-label-row">
                 <label for="sliderRadius">Blade Radius (R):</label>
